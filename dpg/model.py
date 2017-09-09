@@ -2,6 +2,8 @@ import theano
 import theano.tensor as T
 import lasagne
 from collections import OrderedDict
+import cPickle
+import numpy as np
 
 
 def build_actor(l_input, num_act, last_nonlinearity=lasagne.nonlinearities.sigmoid,
@@ -126,3 +128,49 @@ def build_model(state_size, num_act, gamma=0.99,
     target_update_fn = theano.function([], updates=target_updates)
 
     return train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr
+
+
+class Agent(object):
+    def __init__(self, actor_fn, params_actor, params_crit):
+        self._actor_fn = actor_fn
+        self.params_actor = params_actor
+        self.params_crit = params_crit
+
+    def get_actor_weights(self):
+        return [p.get_value() for p in self.params_actor]
+
+    def get_critic_weights(self):
+        return [p.get_value() for p in self.params_crit]
+
+    def get_weights(self):
+        actor_weights = self.get_actor_weights()
+        crit_weights = self.get_critic_weights()
+        return actor_weights, crit_weights
+
+    def set_actor_weights(self, weights):
+        assert len(weights) == len(self.params_actor)
+        [p.set_values(w) for p, w in zip(self.params_actor, weights)]
+
+    def set_crit_weights(self, weights):
+        assert len(weights) == len(self.params_crit)
+        [p.set_values(w) for p, w in zip(self.params_crit, weights)]
+
+    def set_weights(self, actor_weights, crit_weights):
+        self.set_actor_weights(actor_weights)
+        self.set_crit_weights(crit_weights)
+
+    def save(self, fname):
+        with open(fname, 'wb') as f:
+            actor_weigths = self.get_actor_weights()
+            crit_weigths = self.get_critic_weights()
+            cPickle.dump([actor_weigths, crit_weigths], f, -1)
+
+    def load(self, fname):
+        with open(fname, 'rb') as f:
+            actor_weights, critic_wieghts = cPickle.load(f)
+            self.set_actor_weights(actor_weights)
+            self.set_crit_weights(critic_wieghts)
+
+    def act(self, state):
+        state = np.asarray([state])
+        return self._actor_fn(state)[0]
