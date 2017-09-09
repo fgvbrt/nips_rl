@@ -1,0 +1,10 @@
+*.pkl
+*.pyc
+*.log
+.ipynb_checkpoints
+*ipynb
+log
+.idea/
+*.tar.gz
+*.h5
+*.h5_last
