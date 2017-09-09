@@ -149,11 +149,11 @@ class Agent(object):
 
     def set_actor_weights(self, weights):
         assert len(weights) == len(self.params_actor)
-        [p.set_values(w) for p, w in zip(self.params_actor, weights)]
+        [p.set_value(w) for p, w in zip(self.params_actor, weights)]
 
     def set_crit_weights(self, weights):
         assert len(weights) == len(self.params_crit)
-        [p.set_values(w) for p, w in zip(self.params_crit, weights)]
+        [p.set_value(w) for p, w in zip(self.params_crit, weights)]
 
     def set_weights(self, actor_weights, crit_weights):
         self.set_actor_weights(actor_weights)

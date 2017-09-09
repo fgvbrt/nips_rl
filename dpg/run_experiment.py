@@ -1,14 +1,15 @@
 import os
 os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['THEANO_FLAGS'] = 'device=cpu'
 
 import argparse
 import numpy as np
-from model import build_model
+from model import build_model, Agent
 from time import sleep
 from multiprocessing import Process, cpu_count, Value, Queue
 import Queue as queue
 from memory import ReplayMemory
-from agent import Actor, run_agent, elu, sigmoid
+from agent import run_agent, elu, sigmoid
 from state import StateVelCentr, StateVel
 import lasagne
 
@@ -41,15 +42,16 @@ def main():
     num_actions = 18
 
     # build model
+    model_params = [state_transform.state_size, num_actions, args.gamma, args.actor_lr, args.critic_lr]
     train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
-        build_model(state_transform.state_size, num_actions, args.gamma, args.actor_lr, args.critic_lr)
+        build_model(*model_params)
 
     actor_lr_step = (args.actor_lr - args.actor_lr_end) / args.max_steps
     critic_lr_step = (args.critic_lr - args.critic_lr_end) / args.max_steps
 
     # build actor
     weights = [p.get_value() for p in params_actor]
-    actor = Actor(weights, elu)
+    actor = Agent(actor_fn, params_actor, params_crit)
 
     # build replay memory
     memory = ReplayMemory(state_transform.state_size, 18, 500000)
@@ -66,7 +68,7 @@ def main():
     for i in xrange(args.num_agents):
         w_queue = Queue()
         worker = Process(target=run_agent,
-                         args=(actor, state_transform, data_queue, w_queue,
+                         args=(model_params, weights, state_transform, data_queue, w_queue,
                                i, global_step, updates, best_reward, args.test_period,
                                args.num_test_episodes, args.max_steps)
                          )

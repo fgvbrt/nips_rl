@@ -4,6 +4,7 @@ import random
 from random_process import OrnsteinUhlenbeckProcess
 from time import time
 import cPickle
+from model import Agent, build_model
 
 
 def elu(x):
@@ -14,7 +15,7 @@ def sigmoid(x):
     return 1. / (1. + np.exp(-x))
 
 
-class Actor(object):
+class ActorNumpy(object):
     def __init__(self, weights, activation):
         self.weights = weights
         self.activation = activation
@@ -37,8 +38,13 @@ class Actor(object):
         return sigmoid(x)
 
 
-def run_agent(actor, state_transform, data_queue, weights_queue, process, global_step, updates, best_test_reward,
+def run_agent(model_params, weights, state_transform, data_queue, weights_queue, process, global_step, updates, best_test_reward,
               testing_period, num_test_episodes, max_steps=10000000):
+
+    train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
+        build_model(*model_params)
+    actor = Agent(actor_fn, params_actor, params_crit)
+    actor.set_actor_weights(weights)
 
     env = RunEnv2(state_transform)
     random_process = OrnsteinUhlenbeckProcess(theta=.15, mu=0., sigma=.2, size=env.noutput,
@@ -106,7 +112,7 @@ def run_agent(actor, state_transform, data_queue, weights_queue, process, global
 
         # receive weights and set params to weights
         weights = weights_queue.get()
-        actor.set_weights(weights)
+        actor.set_actor_weights(weights)
 
         if process == 0 and total_episodes % testing_period == 0:
             total_test_reward = 0
@@ -126,7 +132,7 @@ def run_agent(actor, state_transform, data_queue, weights_queue, process, global
             if mean_reward > best_test_reward.value:
                 best_test_reward.value = mean_reward
                 fname = 'weights/weights_steps_{}_reward_{}.pkl'.format(global_step.value, int(mean_reward))
-                actor.save_weights(fname)
+                actor.save(fname)
 
         report_str = 'Global step: {}, steps/sec: {:.2f}, updates: {}, episode len {}, reward: {:.2f}, best reward: {:.2f}'. \
             format(global_step.value, 1. * global_step.value / (time() - start), updates.value, steps, total_reward, best_test_reward.value)
