@@ -92,7 +92,7 @@ def main():
 
         # training step
         if len(memory) > args.start_train_steps:
-            batch = memory.random_batch2(args.batch_size)
+            batch = memory.random_batch(args.batch_size)
 
             if np.random.rand() < args.flip_prob:
                 states, actions, rewards, terminals, next_states = batch
@@ -111,7 +111,7 @@ def main():
                 batch = (states_all, actions_all, rewards_all, terminals_all, next_states_all)
 
             actor_loss, critic_loss = train_fn(*batch)
-            updates.value += len(batch[0])
+            updates.value += 1
             if np.isnan(actor_loss):
                 raise Value('actor loss is nan')
             if np.isnan(critic_loss):
