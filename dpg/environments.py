@@ -15,6 +15,8 @@ class RunEnv2(RunEnv):
 
     def _step(self, action):
         s, r, t, info = super(RunEnv2, self)._step(action)
+        info['original_state'] = s
+        info['original_reward'] = r
         s, obst_rew = self.state_transform.process(s)
         return s, (r+obst_rew)*100, t, info
 

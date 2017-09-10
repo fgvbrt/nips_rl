@@ -64,6 +64,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         random_process.reset_states()
 
         total_reward = 0.
+        total_reward_original = 0.
         terminal = False
         steps = 0
         while not terminal:
@@ -72,8 +73,9 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
             action = actor.act(state)
             action += random_process.sample()
 
-            next_state, reward, next_terminal, _ = env.step(action)
+            next_state, reward, next_terminal, info = env.step(action)
             total_reward += reward
+            total_reward_original += info['original_reward']
             steps += 1
             global_step.value += 1
 
@@ -134,8 +136,10 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
                 fname = 'weights/weights_steps_{}_reward_{}.pkl'.format(global_step.value, int(mean_reward))
                 actor.save(fname)
 
-        report_str = 'Global step: {}, steps/sec: {:.2f}, updates: {}, episode len {}, reward: {:.2f}, best reward: {:.2f}'. \
-            format(global_step.value, 1. * global_step.value / (time() - start), updates.value, steps, total_reward, best_test_reward.value)
+        report_str = 'Global step: {}, steps/sec: {:.2f}, updates: {}, episode len {}, ' \
+                     'reward: {:.2f}, original_reward {:.4f}; best reward: {:.2f}'. \
+            format(global_step.value, 1. * global_step.value / (time() - start), updates.value, steps,
+                   total_reward, total_reward_original, best_test_reward.value)
         print report_str
 
         with open('report.log', 'a') as f:

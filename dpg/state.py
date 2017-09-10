@@ -149,7 +149,7 @@ class State(object):
     def _get_obstacle_state_reward(self, state):
 
         if self.obstacles_mode == 'exclude':
-            return None, 0
+            return [], 0
         elif self.obstacles_mode == 'standard':
             return state[-3:], 0
         elif self.obstacles_mode == 'gird':
