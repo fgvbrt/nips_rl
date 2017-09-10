@@ -4,7 +4,7 @@ from sklearn.linear_model import LinearRegression
 from collections import OrderedDict
 
 
-def get_state_names(all=False):
+def get_state_names(all=False, obst=False):
     names = ['pelvis_' + n for n in ('rot', 'x', 'y')]
     names += ['pelvis_vel_' + n for n in ('rot', 'x', 'y')]
     names += ['hip_right', 'knee_right', 'ankle_right', 'hip_left', 'knee_left', 'ankle_left']
@@ -22,9 +22,9 @@ def get_state_names(all=False):
                   ['x', 'y']]
 
     names += ['muscle_left', 'muscle_right']
-    names += ['obst_dist', 'obst_y', 'obst_r']
+    if obst:
+        names += ['obst_dist', 'obst_y', 'obst_r']
     return names
-
 
 def get_names_to_center(centr):
     if centr == 'pelvis':
@@ -42,6 +42,10 @@ def get_bodies_names():
             for i in ['x', 'y']]
 
 
+def get_names_obstacles():
+    return ['toes_left', 'toes_right', 'talus_left', 'talus_right']
+
+
 def calculate_velocity(cur, prev):
     if prev is None:
         return np.zeros_like(cur, dtype=np.float32)
@@ -54,24 +58,31 @@ def _get_pattern_idxs(lst, pattern):
 
 
 class State(object):
-    def __init__(self, obstacles_mode='add_all', obst_grid_dist=1, grid_points=100, last_n_bodies=0):
-        assert obstacles_mode in ['exclude', 'add_all', 'standard']
+    def __init__(self, obstacles_mode='bodies_dist', obst_grid_dist=1, grid_points=100, last_n_bodies=0):
+        assert obstacles_mode in ['exclude', 'grid', 'bodies_dist', 'standard']
 
-        self.state_idxs = [i for i, n in enumerate(get_state_names(True)) if n not in ['pelvis2_x', 'pelvis2_y']]
+        self.state_idxs = [i for i, n in enumerate(get_state_names(True, True)) if n not in ['pelvis2_x', 'pelvis2_y']]
         self.state_names = get_state_names()
         self.step = 0
-
         self.obstacles_mode = obstacles_mode
         self.obstacles = OrderedDict()
-        self.obstacles_arr = np.zeros((3, 3), dtype=np.float32)
-        self.obst_grid_dist = obst_grid_dist
-        self.obst_grid_points = grid_points
-        self.obst_grid_size = obst_grid_dist *2 / grid_points
-        if obstacles_mode == 'exclude':
+
+        self.obst_names = []
+        if obstacles_mode == 'standard':
+            self.obst_names = ['obst_dist', 'obst_y', 'obst_r']
+        elif obstacles_mode == 'grid':
+            self.obst_names = ['obst_grid_{}'.format(i) for i in range(grid_points)]
+            self.obst_grid_dist = obst_grid_dist
+            self.obst_grid_points = grid_points
+            self.obst_grid_size = obst_grid_dist * 2 / grid_points
             self.state_names = self.state_names[:-3]
-        elif obstacles_mode == 'add_all':
-            self.state_names = self.state_names[:-3]
-            self.state_names += ['obst_grid_{}'.format(i) for i in range(grid_points)]
+        elif obstacles_mode == 'bodies_dist':
+            self._obst_names = get_names_obstacles()
+            for i in range(3):
+                for n in self._obst_names:
+                    self.obst_names.append('{}_{}_obst_x_start'.format(n, i))
+                    self.obst_names.append('{}_{}_obst_x_end'.format(n, i))
+                    self.obst_names.append('{}_{}_obst_y'.format(n, i))
 
         self.predict_bodies = last_n_bodies > 0
         self.last_n_bodies = last_n_bodies
@@ -125,7 +136,6 @@ class State(object):
 
     def _add_obstacle(self, state):
         pelvis_x = state[1]
-        mass_x = state[self.state_names.index('mass_x')]
         obstacle_x = state[-3]
 
         if obstacle_x != 100:
@@ -136,17 +146,48 @@ class State(object):
         if len(self.obstacles) > 3:
             Warning('more than 3 obstacles')
 
-        obst_grid = np.zeros(self.obst_grid_points, dtype=np.float32)
-        for k, v in self.obstacles.iteritems():
-            obst_x, obst_y, obst_r = v
-            obst_h = obst_y + obst_r
-            obst_left = int(np.ceil((obst_x - mass_x - obst_r) / self.obst_grid_size) + self.obst_grid_points // 2)
-            obst_right = int(np.ceil((obst_x - mass_x + obst_r) / self.obst_grid_size) + self.obst_grid_points // 2)
-            obst_left = max(obst_left, 0)
-            obst_right = max(obst_right, -1)
-            obst_grid[obst_left:obst_right + 1] = obst_h
+    def _get_obstacle_state_reward(self, state):
 
-        return obst_grid
+        if self.obstacles_mode == 'exclude':
+            return None, 0
+        elif self.obstacles_mode == 'standard':
+            return state[-3:], 0
+        elif self.obstacles_mode == 'gird':
+            mass_x = state[self.state_names.index('mass_x')]
+            obst_grid = np.zeros(self.obst_grid_points, dtype=np.float32)
+            for k, v in self.obstacles.iteritems():
+                obst_x, obst_y, obst_r = v
+                obst_h = obst_y + obst_r
+                obst_left = int(np.ceil((obst_x - mass_x - obst_r) / self.obst_grid_size) + self.obst_grid_points // 2)
+                obst_right = int(np.ceil((obst_x - mass_x + obst_r) / self.obst_grid_size) + self.obst_grid_points // 2)
+                obst_left = max(obst_left, 0)
+                obst_right = max(obst_right, -1)
+                obst_grid[obst_left:obst_right + 1] = obst_h
+            return obst_grid, 0
+        else:
+            obst_state = []
+            obst_reward = 0
+            for i in range(3):
+                if i >= len(self.obstacles):
+                    for n in self._obst_names:
+                        body_y = state[self.state_names.index(n + '_y')]
+                        obst_state.extend([10, 10, body_y])
+                else:
+                    v = self.obstacles.values()[self.obstacles.keys()[i]]
+                    obst_x, obst_y, obst_r = v
+                    obst_h = obst_y + obst_r
+                    obst_x_start = obst_x - obst_r
+                    obst_x_end = obst_x + obst_r
+                    for n in self._obst_names:
+                        body_x = state[self.state_names.index(n + '_x')]
+                        body_y = state[self.state_names.index(n + '_y')]
+                        obst_state.append(obst_x_start - body_x)
+                        obst_state.append(obst_x_end - body_x)
+                        obst_state.append(body_y - obst_h)
+                        if obst_reward>=0 and body_x >= obst_x_start and body_x<=obst_x_end and\
+                            obst_h >= body_y:
+                            obst_reward = -0.5
+            return np.asarray(obst_state), obst_reward
 
     def process(self, state):
         state = np.asarray(state, dtype=np.float32)
@@ -154,11 +195,8 @@ class State(object):
         if self.step == 0:
             state[-3:] = [100, 0, 0]
 
-        if self.obstacles_mode == 'exclude':
-            state = state[:-3]
-        elif self.obstacles_mode == 'add_all':
-            obst_grid = self._add_obstacle(state)
-            state = np.concatenate([state[:-3], obst_grid])
+        obst_state, obst_reward = self._get_obstacle_state_reward(state)
+        state = state[:-3]
 
         # update last bodies
         #state_no_pred = state.copy()
@@ -172,8 +210,9 @@ class State(object):
 
         self.step += 1
         #return (state_no_pred + state)/2.
-        return state
+        return (state, obst_state), obst_reward
 
+    '''
     def flip_state(self, state, copy=True):
         assert np.ndim(state) == 1
         state = np.asarray(state, dtype=np.float32)
@@ -190,14 +229,15 @@ class State(object):
         states[:, self.left_idxs] = right
         states[:, self.right_idxs] = left
         return states
+    '''
 
     @property
     def state_size(self):
-        return len(self.state_names_out)
+        return len(self.state_names_out) + len(self.obst_names)
 
 
 class StateVel(State):
-    def __init__(self, vel_states=get_bodies_names(), obstacles_mode='add_all', last_n_bodies=0):
+    def __init__(self, vel_states=get_bodies_names(), obstacles_mode='bodies_dist', last_n_bodies=0):
         super(StateVel, self).__init__(obstacles_mode=obstacles_mode, last_n_bodies=last_n_bodies)
         self.vel_idxs = [self.state_names.index(k) for k in vel_states]
         self.prev_vals = None
@@ -211,18 +251,18 @@ class StateVel(State):
         self.prev_vals = None
 
     def process(self, state):
-        state = super(StateVel, self).process(state)
+        (state, obst_state), obst_reward = super(StateVel, self).process(state)
         cur_vals = state[self.vel_idxs]
         vel = calculate_velocity(cur_vals, self.prev_vals)
         self.prev_vals = cur_vals
-        state = np.concatenate((state, vel))
-        return state
+        state = np.concatenate((state, vel, obst_state))
+        return state, obst_reward
 
 
 class StateVelCentr(State):
     def __init__(self, centr_state='mass_x', vel_states=get_bodies_names(),
                  states_to_center=get_names_to_center('mass'),
-                 vel_before_centr=True, obstacles_mode='add_all',
+                 vel_before_centr=True, obstacles_mode='bodies_dist',
                  exclude_centr=False, last_n_bodies=0):
         super(StateVelCentr, self).__init__(obstacles_mode=obstacles_mode, last_n_bodies=last_n_bodies)
 
@@ -255,7 +295,7 @@ class StateVelCentr(State):
         self.prev_vals = None
 
     def process(self, state):
-        state = super(StateVelCentr, self).process(state)
+        (state, obst_state), obst_reward = super(StateVelCentr, self).process(state)
 
         if self.vel_before_centr:
             cur_vals = state[self.vel_idxs]
@@ -271,5 +311,5 @@ class StateVelCentr(State):
         if self.exclude_centr:
             state = np.concatenate([state[:max(0, self.centr_idx)], state[self.centr_idx+1:]])
 
-        state = np.concatenate((state, vel))
-        return state
+        state = np.concatenate((state, vel, obst_state))
+        return state, obst_reward

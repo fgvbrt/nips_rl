@@ -10,12 +10,13 @@ class RunEnv2(RunEnv):
     def reset(self, difficulty=2, seed=None):
         s = super(RunEnv2, self).reset(difficulty=difficulty, seed=seed)
         self.state_transform.reset()
-        return self.state_transform.process(s)
+        s, _ = self.state_transform.process(s)
+        return s
 
     def _step(self, action):
         s, r, t, info = super(RunEnv2, self)._step(action)
-        s = self.state_transform.process(s)
-        return s, r*100, t, info
+        s, obst_rew = self.state_transform.process(s)
+        return s, (r+obst_rew)*100, t, info
 
 
 class JumpEnv(RunEnv):

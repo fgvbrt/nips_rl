@@ -36,7 +36,7 @@ def main():
     args = get_args()
 
     #state_transform = StateVelCentr(exclude_obstacles=True)
-    state_transform = StateVelCentr(last_n_bodies=3, exclude_centr=True)
+    state_transform = StateVelCentr(last_n_bodies=0, exclude_centr=True)
     #env = RunEnv2(state_transform)
     #state_transform = StateVel(exclude_obstacles=True)
     num_actions = 18
