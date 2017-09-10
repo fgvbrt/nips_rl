@@ -21,7 +21,7 @@ def get_args():
     parser.add_argument('--sleep', type=int, default=1, help="Sleep time in seconds before start each worker.")
     parser.add_argument('--max_steps', type=int, default=10000000, help="Number of steps.")
     parser.add_argument('--test_period', default=10, type=int, help="Period testing and saving weighs.")
-    parser.add_argument('--num_test_episodes', type=int, default=2, help="Number of test episodes.")
+    parser.add_argument('--num_test_episodes', type=int, default=3, help="Number of test episodes.")
     parser.add_argument('--batch_size', type=int, default=2000, help="Batch size.")
     parser.add_argument('--start_train_steps', type=int, default=10000, help="Number of steps tp start training.")
     parser.add_argument('--critic_lr', type=float, default=2e-3, help="critic learning rate")
