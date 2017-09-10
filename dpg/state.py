@@ -184,8 +184,8 @@ class State(object):
                         obst_state.append(obst_x_start - body_x)
                         obst_state.append(obst_x_end - body_x)
                         obst_state.append(body_y - obst_h)
-                        if obst_reward>=0 and body_x >= obst_x_start and body_x<=obst_x_end and\
-                            obst_h >= body_y:
+                        if obst_reward>=0 and body_x >= (obst_x_start - obst_r/2) \
+                                and (body_x<=obst_x_end+obst_r/2) and (obst_h +obst_r/2) >= body_y:
                             obst_reward = -0.5
             return np.asarray(obst_state), obst_reward
 
