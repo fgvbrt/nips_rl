@@ -1,11 +1,14 @@
 import numpy as np
 from osim.env import RunEnv
+from gym.spaces import Box, MultiBinary
 
 
 class RunEnv2(RunEnv):
     def __init__(self, state_transform, visualize=False, max_obstacles=3):
         super(RunEnv2, self).__init__(visualize, max_obstacles)
         self.state_transform = state_transform
+        self.observation_space = Box(-1000, 1000, state_transform.state_size)
+        self.action_space = MultiBinary(18)
 
     def reset(self, difficulty=2, seed=None):
         s = super(RunEnv2, self).reset(difficulty=difficulty, seed=seed)
@@ -27,6 +30,7 @@ class JumpEnv(RunEnv):
 
     def __init__(self, visualize=False, max_obstacles=0):
         super(JumpEnv, self).__init__(visualize, max_obstacles)
+        self.action_space = MultiBinary(9)
 
     def get_observation(self):
         observation = super(JumpEnv, self).get_observation()
