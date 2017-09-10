@@ -3,7 +3,7 @@ from osim.env import RunEnv
 
 
 class RunEnv2(RunEnv):
-    def __init__(self, state_transform, visualize=False, max_obstacles=0):
+    def __init__(self, state_transform, visualize=False, max_obstacles=3):
         super(RunEnv2, self).__init__(visualize, max_obstacles)
         self.state_transform = state_transform
 
