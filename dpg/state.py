@@ -120,7 +120,7 @@ class State(object):
                 #print 'state after', state[self.bodies_idxs]
 
     def _update_bodies(self, state, axis):
-        if self.predict_bodies:
+        if self.predict_bodies and self.step < 1000:
             self.last_bodies[self.step, :, axis] = state[self.bodies_idxs]
 
     def _add_obstacle(self, state):
