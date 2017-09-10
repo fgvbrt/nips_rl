@@ -5,7 +5,7 @@ from osim.env import RunEnv
 import numpy as np
 from osim.http.client import Client
 
-TOKEN = 'ff0bd3bac61702e0acc22c0ce70630b5'
+TOKEN = 'e298627d07b55655ef35bb859431813e'
 REMOTE_BASE = 'http://grader.crowdai.org:1729'
 
 

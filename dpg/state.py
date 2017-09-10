@@ -173,7 +173,7 @@ class State(object):
                         body_y = state[self.state_names.index(n + '_y')]
                         obst_state.extend([10, 10, body_y])
                 else:
-                    v = self.obstacles.values()[self.obstacles.keys()[i]]
+                    v = self.obstacles.values()[i]
                     obst_x, obst_y, obst_r = v
                     obst_h = obst_y + obst_r
                     obst_x_start = obst_x - obst_r
@@ -195,6 +195,7 @@ class State(object):
         if self.step == 0:
             state[-3:] = [100, 0, 0]
 
+        self._add_obstacle(state)
         obst_state, obst_reward = self._get_obstacle_state_reward(state)
         state = state[:-3]
 
