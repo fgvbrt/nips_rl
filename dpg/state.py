@@ -77,7 +77,7 @@ class State(object):
             self.obst_grid_size = obst_grid_dist * 2 / grid_points
             self.state_names = self.state_names[:-3]
         elif obstacles_mode == 'bodies_dist':
-            self._obst_names = get_names_obstacles()
+            self._obst_names = ['mass']
             for i in range(3):
                 for n in self._obst_names:
                     self.obst_names.append('{}_{}_obst_x_start'.format(n, i))
@@ -166,7 +166,6 @@ class State(object):
             return obst_grid, 0
         else:
             obst_state = []
-            obst_reward = 0
             for i in range(3):
                 if i >= len(self.obstacles):
                     for n in self._obst_names:
@@ -184,10 +183,25 @@ class State(object):
                         obst_state.append(obst_x_start - body_x)
                         obst_state.append(obst_x_end - body_x)
                         obst_state.append(body_y - obst_h)
-                        if obst_reward>=0 and body_x >= (obst_x_start - obst_r/2) \
-                                and (body_x<=obst_x_end+obst_r/2) and (obst_h +obst_r/2) >= body_y:
-                            obst_reward = -0.5
-            return np.asarray(obst_state), obst_reward
+            return np.asarray(obst_state), self._obst_reward(state)
+
+    def _obst_reward(self, state):
+        obst_reward = 0
+        for i in range(3):
+            if i >= len(self.obstacles):
+                break
+            else:
+                v = self.obstacles.values()[i]
+                obst_x, obst_y, obst_r = v
+                obst_h = obst_y + obst_r
+                obst_x_start = obst_x - obst_r
+                obst_x_end = obst_x + obst_r
+                for n in get_names_obstacles():
+                    body_x = state[self.state_names.index(n + '_x')]
+                    body_y = state[self.state_names.index(n + '_y')]
+                    if obst_reward >= 0 and body_x >= obst_x_start and body_x <= obst_x_end and obst_h >= body_y:
+                        obst_reward = -0.5
+        return obst_reward
 
     def process(self, state):
         state = np.asarray(state, dtype=np.float32)
