@@ -59,3 +59,31 @@ class OrnsteinUhlenbeckProcess(AnnealedGaussianProcess):
 
     def reset_states(self):
         self.x_prev = self.x0 if self.x0 is not None else np.zeros(self.size)
+
+
+class RandomActivation(object):
+    def __init__(self, size=18, reps_min=1, reps_max=3, min_miscles=1, max_muscles=None):
+        self.size = size
+        self.reps_min = reps_min
+        self.reps_max = reps_max
+        self.min_miscles = min_miscles
+        self.max_muscles = size if max_muscles is None else min(size, max_muscles)
+        self.muscles = None
+        self.all_muscles = np.arange(size)
+        self.x = np.zeros(18)
+
+    def sample(self):
+        if self.counter == 0:
+            self.counter = np.random.randint(self.reps_min, self.reps_max+1)
+            num_miscles = np.random.choice(self.min_miscles, self.max_muscles+1)
+            muscles = np.random.choice(self.all_muscles, num_miscles, replace=False)
+            self.x.fill(0)
+            self.x[muscles] = 1
+
+        self.counter -= 1
+        return self.x
+
+    def reset_states(self):
+        self.counter = 0
+        self.muscles = None
+        self.x.fill(0)
