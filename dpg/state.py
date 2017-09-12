@@ -170,7 +170,7 @@ class State(object):
                 if i >= len(self.obstacles):
                     for n in self._obst_names:
                         body_y = state[self.state_names.index(n + '_y')]
-                        obst_state.extend([10, 10, body_y])
+                        obst_state.extend([10, 0, 0])
                 else:
                     v = self.obstacles.values()[i]
                     obst_x, obst_y, obst_r = v
@@ -179,28 +179,25 @@ class State(object):
                     obst_x_end = obst_x + obst_r
                     for n in self._obst_names:
                         body_x = state[self.state_names.index(n + '_x')]
-                        body_y = state[self.state_names.index(n + '_y')]
-                        obst_state.append(obst_x_start - body_x)
-                        obst_state.append(obst_x_end - body_x)
-                        obst_state.append(body_y - obst_h)
+                        #body_y = state[self.state_names.index(n + '_y')]
+                        obst_state.append(obst_x - body_x)
+                        obst_state.append(obst_r)
+                        obst_state.append(obst_h)
             return np.asarray(obst_state), self._obst_reward(state)
 
     def _obst_reward(self, state):
         obst_reward = 0
-        for i in range(3):
-            if i >= len(self.obstacles):
-                break
-            else:
-                v = self.obstacles.values()[i]
-                obst_x, obst_y, obst_r = v
-                obst_h = obst_y + obst_r
-                obst_x_start = obst_x - obst_r
-                obst_x_end = obst_x + obst_r
-                for n in get_names_obstacles():
-                    body_x = state[self.state_names.index(n + '_x')]
-                    body_y = state[self.state_names.index(n + '_y')]
-                    if obst_reward >= 0 and body_x >= obst_x_start and body_x <= obst_x_end and obst_h >= body_y:
-                        obst_reward = -0.5
+        for k in self.obstacles:
+            v = self.obstacles[k]
+            obst_x, obst_y, obst_r = v
+            obst_h = obst_y + obst_r
+            obst_x_start = obst_x - obst_r
+            obst_x_end = obst_x + obst_r
+            for n in get_names_obstacles():
+                body_x = state[self.state_names.index(n + '_x')]
+                body_y = state[self.state_names.index(n + '_y')]
+                if obst_reward >= 0 and body_x >= obst_x_start and body_x <= obst_x_end and obst_h >= body_y:
+                    obst_reward = -0.1
         return obst_reward
 
     def process(self, state):

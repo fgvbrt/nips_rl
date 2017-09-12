@@ -1,5 +1,5 @@
 import argparse
-from agent import Actor, elu
+from agent import ActorNumpy, elu
 import cPickle
 from osim.env import RunEnv
 import numpy as np
