@@ -1,7 +1,7 @@
 from environments import RunEnv2
 import numpy as np
 import random
-from random_process import OrnsteinUhlenbeckProcess
+from random_process import OrnsteinUhlenbeckProcess, RandomActivation
 from time import time
 import cPickle
 from model import Agent, build_model
@@ -47,8 +47,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     actor.set_actor_weights(weights)
 
     env = RunEnv2(state_transform)
-    random_process = OrnsteinUhlenbeckProcess(theta=.15, mu=0., sigma=.2, size=env.noutput,
-                                              sigma_min=0.05, n_steps_annealing=1e6)
+    random_process = RandomActivation(size=env.noutput)
 
     # prepare buffers for data
     states = []
@@ -72,7 +71,6 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
 
             action = actor.act(state)
             action += random_process.sample()
-
             next_state, reward, next_terminal, info = env.step(action)
             total_reward += reward
             total_reward_original += info['original_reward']

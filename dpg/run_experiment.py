@@ -36,7 +36,7 @@ def main():
     args = get_args()
 
     #state_transform = StateVelCentr(exclude_obstacles=True)
-    state_transform = StateVelCentr()
+    state_transform = StateVelCentr(obstacles_mode='standard')
     #state_transform = StateVel(exclude_obstacles=True)
     num_actions = 18
 
