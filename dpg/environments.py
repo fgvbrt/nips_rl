@@ -17,6 +17,7 @@ class RunEnv2(RunEnv):
         return s
 
     def _step(self, action):
+        action = np.clip(action, 0, 1)
         s, r, t, info = super(RunEnv2, self)._step(action)
         info['original_state'] = s
         info['original_reward'] = r
