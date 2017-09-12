@@ -70,11 +70,12 @@ class RandomActivation(object):
         self.max_muscles = size if max_muscles is None else min(size, max_muscles)
         self.all_muscles = np.arange(size)
         self.x = np.zeros(18)
+        self.counter = 0
 
     def sample(self):
         if self.counter == 0:
             self.counter = np.random.randint(self.reps_min, self.reps_max+1)
-            num_muscles = np.random.choice(self.min_miscles, self.max_muscles+1)
+            num_muscles = np.random.randint(self.min_miscles, self.max_muscles+1)
             muscles = np.random.choice(self.all_muscles, num_muscles, replace=False)
             self.x.fill(0)
             self.x[muscles] = 1
