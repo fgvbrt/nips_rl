@@ -1,7 +1,7 @@
 from environments import RunEnv2
 import numpy as np
 import random
-from random_process import OrnsteinUhlenbeckProcess
+from random_process import OrnsteinUhlenbeckProcess, RandomActivation
 from time import time
 import cPickle
 from model import Agent, build_model
@@ -46,10 +46,10 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     actor = Agent(actor_fn, params_actor, params_crit)
     actor.set_actor_weights(weights)
 
-    env = RunEnv2(state_transform)
-    random_process = OrnsteinUhlenbeckProcess(theta=.15, mu=0., sigma=.2, size=env.noutput,
-                                              sigma_min=0.05, n_steps_annealing=1e6)
-
+    env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5)
+    #random_process = RandomActivation(size=env.noutput)
+    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.2, size=env.noutput,
+                                              sigma_min=0.15, n_steps_annealing=1e5)
     # prepare buffers for data
     states = []
     actions = []
@@ -58,6 +58,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
 
     total_episodes = 0
     start = time()
+    
     while global_step.value < max_steps:
         seed = random.randrange(2**32-2)
         state = env.reset(seed=seed, difficulty=2)
@@ -119,7 +120,8 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         if process == 0 and total_episodes % testing_period == 0:
             total_test_reward = 0
             for ep in range(num_test_episodes):
-                state = env.reset(difficulty=2)
+                seed = random.randrange(2**32-2)
+                state = env.reset(seed=seed, difficulty=2) 
 
                 while True:
                     state = np.asarray(state, dtype='float32')

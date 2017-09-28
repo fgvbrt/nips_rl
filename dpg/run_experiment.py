@@ -26,8 +26,8 @@ def get_args():
     parser.add_argument('--start_train_steps', type=int, default=10000, help="Number of steps tp start training.")
     parser.add_argument('--critic_lr', type=float, default=2e-3, help="critic learning rate")
     parser.add_argument('--actor_lr', type=float, default=1e-3, help="actor learning rate.")
-    parser.add_argument('--critic_lr_end', type=float, default=2e-4, help="critic learning rate")
-    parser.add_argument('--actor_lr_end', type=float, default=2e-4, help="actor learning rate.")
+    parser.add_argument('--critic_lr_end', type=float, default=1e-5, help="critic learning rate")
+    parser.add_argument('--actor_lr_end', type=float, default=1e-5, help="actor learning rate.")
     parser.add_argument('--flip_prob', type=float, default=0., help="Probability of flipping.")
     return parser.parse_args()
 
@@ -36,8 +36,7 @@ def main():
     args = get_args()
 
     #state_transform = StateVelCentr(exclude_obstacles=True)
-    state_transform = StateVelCentr(last_n_bodies=0, exclude_centr=True)
-    #env = RunEnv2(state_transform)
+    state_transform = StateVelCentr(obstacles_mode='standard', exclude_centr=True, vel_states=[])
     #state_transform = StateVel(exclude_obstacles=True)
     num_actions = 18
 
@@ -54,7 +53,7 @@ def main():
     actor = Agent(actor_fn, params_actor, params_crit)
 
     # build replay memory
-    memory = ReplayMemory(state_transform.state_size, 18, 500000)
+    memory = ReplayMemory(state_transform.state_size, 18, 5000000)
 
     # init shared variables
     global_step = Value('i', 0)

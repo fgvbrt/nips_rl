@@ -151,7 +151,9 @@ class State(object):
         if self.obstacles_mode == 'exclude':
             return [], 0
         elif self.obstacles_mode == 'standard':
-            return state[-3:], 0
+            if state[-3]==100:
+                return [-1., 0., 0.], 0
+            return np.clip(state[-3:], -10, 10), 0
         elif self.obstacles_mode == 'gird':
             mass_x = state[self.state_names.index('mass_x')]
             obst_grid = np.zeros(self.obst_grid_points, dtype=np.float32)
@@ -212,8 +214,8 @@ class State(object):
         self.step += 1
         #return (state_no_pred + state)/2.
         return (state, obst_state), obst_reward
+        #return np.concatenate(state, obst_state), obst_reward
 
-    '''
     def flip_state(self, state, copy=True):
         assert np.ndim(state) == 1
         state = np.asarray(state, dtype=np.float32)
@@ -230,7 +232,6 @@ class State(object):
         states[:, self.left_idxs] = right
         states[:, self.right_idxs] = left
         return states
-    '''
 
     @property
     def state_size(self):
@@ -261,8 +262,8 @@ class StateVel(State):
 
 
 class StateVelCentr(State):
-    def __init__(self, centr_state='mass_x', vel_states=get_bodies_names(),
-                 states_to_center=get_names_to_center('mass'),
+    def __init__(self, centr_state='pelvis_x', vel_states=get_bodies_names(),
+                 states_to_center=get_names_to_center('pelvis'),
                  vel_before_centr=True, obstacles_mode='bodies_dist',
                  exclude_centr=False, last_n_bodies=0):
         super(StateVelCentr, self).__init__(obstacles_mode=obstacles_mode, last_n_bodies=last_n_bodies)
