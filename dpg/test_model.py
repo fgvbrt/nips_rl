@@ -1,5 +1,5 @@
 import argparse
-from agent import Actor, elu
+from agent import ActorNumpy, elu
 import cPickle
 from osim.env import RunEnv
 import numpy as np
@@ -64,7 +64,7 @@ def test_model():
     with open(args.model, 'rb') as f:
         weights = cPickle.load(f)
 
-    actor = Actor(weights, elu)
+    actor = ActorNumpy(weights, elu)
 
     if args.submit:
         all_total_rewards = submit_agent(actor)
