@@ -59,7 +59,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     total_episodes = 0
     start = time()
     start_exp= datetime.now().strftime("%d.%m.%Y-%H:%M")
-    
+    save_num = 0
     while global_step.value < max_steps:
         seed = random.randrange(2**32-2)
         state = env.reset(seed=seed, difficulty=2)
@@ -69,7 +69,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         total_reward_original = 0.
         terminal = False
         steps = 0
-        save_num = 0
+        
         while not terminal:
             state = np.asarray(state, dtype='float32')
 
@@ -142,6 +142,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
             elif mean_reward > 3000:
                 fname = 'weights/best_weights_start_{}_reward_{}.pkl'.format(start_exp, int(mean_reward))
                 actor.save(fname)
+        if process == 0 and total_episodes % testing_period == 5:
             save_num += 1
             fname = 'weights/last_weights_start_{}_{}.pkl'.format(start_exp, save_num)
             actor.save(fname)
