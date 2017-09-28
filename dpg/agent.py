@@ -142,7 +142,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
             elif mean_reward > 3000:
                 fname = 'weights/best_weights_start_{}_reward_{}.pkl'.format(start_exp, int(mean_reward))
                 actor.save(fname)
-        if process == 0 and total_episodes % testing_period == 5:
+        if process == 0 and total_episodes % 5 == 0:
             save_num += 1
             fname = 'weights/last_weights_start_{}_{}.pkl'.format(start_exp, save_num)
             actor.save(fname)
