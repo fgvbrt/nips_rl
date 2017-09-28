@@ -151,7 +151,10 @@ class State(object):
         if self.obstacles_mode == 'exclude':
             return [], 0
         elif self.obstacles_mode == 'standard':
-            return np.clip(state[-3:], -10, 10), 0
+            if state[-3] == 100:
+                return [-1, 0, 0], 0
+            else:
+                return np.clip(state[-3:], -10, 10), 0            
         elif self.obstacles_mode == 'gird':
             mass_x = state[self.state_names.index('mass_x')]
             obst_grid = np.zeros(self.obst_grid_points, dtype=np.float32)

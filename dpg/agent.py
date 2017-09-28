@@ -46,8 +46,10 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     actor = Agent(actor_fn, params_actor, params_crit)
     actor.set_actor_weights(weights)
 
-    env = RunEnv2(state_transform)
-    random_process = RandomActivation(size=env.noutput)
+    env = RunEnv2(state_transform, skip_frame=5)
+    #random_process = RandomActivation(size=env.noutput)
+    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.3, size=env.noutput,
+                                              sigma_min=0.1, n_steps_annealing=1e5)
 
     # prepare buffers for data
     states = []
@@ -67,10 +69,11 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         terminal = False
         steps = 0
         while not terminal:
-            state = np.asarray(state, dtype='float32')
 
+            state = np.asarray(state, dtype='float32')
             action = actor.act(state)
             action += random_process.sample()
+            
             next_state, reward, next_terminal, info = env.step(action)
             total_reward += reward
             total_reward_original += info['original_reward']
