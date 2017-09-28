@@ -5,7 +5,7 @@ from random_process import OrnsteinUhlenbeckProcess, RandomActivation
 from time import time
 import cPickle
 from model import Agent, build_model
-
+from datetime import datetime
 
 def elu(x):
     return np.where(x > 0, x, np.expm1(x))
@@ -58,6 +58,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
 
     total_episodes = 0
     start = time()
+    start_exp= datetime.now().strftime("%d.%m.%Y-%H:%M")
     
     while global_step.value < max_steps:
         seed = random.randrange(2**32-2)
@@ -68,6 +69,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         total_reward_original = 0.
         terminal = False
         steps = 0
+        save_num = 0
         while not terminal:
             state = np.asarray(state, dtype='float32')
 
@@ -118,25 +120,32 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         actor.set_actor_weights(weights)
 
         if process == 0 and total_episodes % testing_period == 0:
-            total_test_reward = 0
+            test_rewards = []
             for ep in range(num_test_episodes):
                 seed = random.randrange(2**32-2)
                 state = env.reset(seed=seed, difficulty=2) 
-
+                test_reward = 0
                 while True:
                     state = np.asarray(state, dtype='float32')
                     action = actor.act(state)
                     state, reward, terminal, _ = env.step(action)
-                    total_test_reward += reward
+                    test_reward += reward
                     if terminal:
                         break
-
-            mean_reward = 1. * total_test_reward / num_test_episodes
-            print 'test reward mean', mean_reward
+                test_rewards.append(test_reward)
+            mean_reward = np.mean(test_rewards)
+            print 'test reward mean: {}, std: {}, all: {} '.format(mean_reward, np.std(test_rewards), test_rewards)
             if mean_reward > best_test_reward.value:
                 best_test_reward.value = mean_reward
-                fname = 'weights/weights_steps_{}_reward_{}.pkl'.format(global_step.value, int(mean_reward))
+                fname = 'weights/best_weights_start_{}_reward_{}.pkl'.format(start_exp, int(mean_reward))
                 actor.save(fname)
+            elif mean_reward > 3000:
+                fname = 'weights/best_weights_start_{}_reward_{}.pkl'.format(start_exp, int(mean_reward))
+                actor.save(fname)
+            save_num += 1
+            fname = 'weights/last_weights_start_{}_{}.pkl'.format(start_exp, save_num)
+            actor.save(fname)
+            save_num = save_num % 10
 
         report_str = 'Global step: {}, steps/sec: {:.2f}, updates: {}, episode len {}, ' \
                      'reward: {:.2f}, original_reward {:.4f}; best reward: {:.2f}'. \
