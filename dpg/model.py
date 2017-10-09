@@ -57,21 +57,41 @@ def build_model(state_size, num_act, gamma=0.99,
     terminals = T.col('terminals')
 
     # current network
-    l_states, l_actions, l_actor, l_critic = build_actor_critic(state_size, num_act)
+    l_states1, l_actions1, l_actor1, l_critic1 = build_actor_critic(state_size, num_act)
+    l_states2, l_actions2, l_actor2, l_critic2 = build_actor_critic(state_size-3, num_act)
     # target network
-    l_states_target, l_actions_target, l_actor_target, l_critic_target =\
+    l_states_target1, l_actions_target1, l_actor_target1, l_critic_target1 =\
         build_actor_critic(state_size, num_act)
+    l_states_target2, l_actions_target2, l_actor_target2, l_critic_target2 = \
+        build_actor_critic(state_size-3, num_act)
 
     # get current network output tensors
-    actions_pred = lasagne.layers.get_output(l_actor, states)
-    q_vals = lasagne.layers.get_output(l_critic, {l_states: states, l_actions: actions})
-    v_vals = lasagne.layers.get_output(l_critic, {l_states: states, l_actions: actions_pred})
+    actions_pred1 = lasagne.layers.get_output(l_actor1, states)
+    q_vals1 = lasagne.layers.get_output(l_critic1, {l_states1: states, l_actions1: actions})
+    v_vals1 = lasagne.layers.get_output(l_critic1, {l_states1: states, l_actions1: actions_pred1})
+
+    actions_pred2 = lasagne.layers.get_output(l_actor2, states[:, :-3])
+    q_vals2 = lasagne.layers.get_output(l_critic2, {l_states2: states[:, :-3], l_actions2: actions})
+    v_vals2 = lasagne.layers.get_output(l_critic2, {l_states2: states[:, :-3], l_actions2: actions_pred2})
 
     # get target network q-values
-    actions_pred_target = lasagne.layers.get_output(l_actor_target, next_states)
-    v_vals_target = lasagne.layers.get_output(
-        l_critic_target,
-        {l_states_target: next_states, l_actions_target: actions_pred_target})
+    actions_pred_target1 = lasagne.layers.get_output(l_actor_target1, next_states)
+    v_vals_target1 = lasagne.layers.get_output(
+        l_critic_target1,
+        {l_states_target1: next_states, l_actions_target1: actions_pred_target1})
+
+    actions_pred_target2 = lasagne.layers.get_output(l_actor_target2, next_states[:, :-3])
+    v_vals_target2 = lasagne.layers.get_output(
+        l_critic_target2,
+        {l_states_target2: next_states[:, :-3], l_actions_target2: actions_pred_target2})
+
+    # below are theano tensors
+    m = T.eq(states[:, -3], -1).reshape((states.shape[0], 1))
+    actions_pred = (1-m)*actions_pred1 + m*actions_pred2
+    q_vals = (1-m)*q_vals1 + m*q_vals2
+    v_vals = (1-m)*v_vals1 + m*v_vals2
+
+    v_vals_target = (1-m)*v_vals_target1 + m*v_vals_target2
 
     # target for q_vals
     target = gamma*v_vals_target*(1.-terminals) + rewards
@@ -90,12 +110,14 @@ def build_model(state_size, num_act, gamma=0.99,
     actor_loss = -1.*T.mean(v_vals)
 
     # get params
-    params_actor = lasagne.layers.get_all_params(l_actor)
-    params_crit = lasagne.layers.get_all_params(l_critic)
+    params_actor = lasagne.layers.get_all_params(l_actor1) + lasagne.layers.get_all_params(l_actor2)
+    params_crit = lasagne.layers.get_all_params(l_critic1) + lasagne.layers.get_all_params(l_critic2)
     params = params_actor + params_crit
     # get target params
-    params_target = lasagne.layers.get_all_params(l_actor_target) + \
-                    lasagne.layers.get_all_params(l_critic_target)
+    params_target = lasagne.layers.get_all_params(l_actor_target1) + \
+                    lasagne.layers.get_all_params(l_actor_target2) + \
+                    lasagne.layers.get_all_params(l_critic_target1) + \
+                    lasagne.layers.get_all_params(l_critic_target2)
 
     # set critic target to critic params
     for param, param_target in zip(params, params_target):
