@@ -38,6 +38,50 @@ class ActorNumpy(object):
         return sigmoid(x)
 
 
+def find_noise_delta(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
+    orig_weights = actor.get_actor_weights(True)
+    orig_act = actor.act_batch(states)
+
+    sigma_min = 0
+    sigma_max = 100
+    sigma = sigma_max
+    step = 0
+    while step < max_steps:
+        weights = [w + np.random.normal(scale=sigma, size=np.shape(w)).astype('float32')
+                   for w in orig_weights]
+        actor.set_actor_weights(weights, True)
+        new_act = actor.act_batch(states)
+        d = np.sqrt(np.mean(np.square(new_act - orig_act)))
+
+        dd = d - target_d
+        if np.abs(dd) < tol:
+            actor.set_actor_weights(orig_weights, True)
+            return sigma
+
+        # too big sigma
+        if dd > 0:
+            sigma_max = sigma
+        # too small sigma
+        else:
+            sigma_min = sigma
+        sigma = sigma_min + (sigma_max - sigma_min) / 2
+        step += 1
+
+    actor.set_actor_weights(orig_weights, True)
+    return sigma
+
+
+def get_noisy_weights(params, sigma):
+    weights = []
+    for p in params:
+        w = p.get_value()
+        if p.name in ('gamma', 'beta'):
+            weights.append(w)
+        else:
+            weights.append(w + np.random.normal(scale=sigma, size=np.shape(w)).astype('float32'))
+    return weights
+
+
 def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
               process, global_step, updates, best_reward, max_steps=10000000):
 
@@ -99,7 +143,9 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         actions.append(np.zeros(env.noutput))
         rewards.append(0)
         terminals.append(terminal)
-        data = (np .asarray(states).astype('float32'),
+
+        states_np = np.asarray(states).astype('float32')
+        data = (states_np,
                 np.asarray(actions).astype('float32'),
                 np.asarray(rewards).astype('float32'),
                 np.asarray(terminals).astype('float32'),
@@ -107,15 +153,18 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         # send data for training
         data_queue.put((process, data))
 
+        # receive weights and set params to weights
+        weights = weights_queue.get()
+        actor.set_actor_weights(weights)
+        sigma = find_noise_delta(actor, states_np, random_process.current_sigma)
+        weights = get_noisy_weights(actor.params_actor, sigma)
+        actor.set_actor_weights(weights)
+
         # clear buffers
         del states[:]
         del actions[:]
         del rewards[:]
         del terminals[:]
-
-        # receive weights and set params to weights
-        weights = weights_queue.get()
-        actor.set_actor_weights(weights)
 
         report_str = 'Global step: {}, steps/sec: {:.2f}, updates: {}, episode len {}, ' \
                      'reward: {:.2f}, original_reward {:.4f}; best reward: {:.2f}'. \

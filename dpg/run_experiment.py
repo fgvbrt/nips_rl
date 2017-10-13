@@ -76,50 +76,6 @@ def test_agent(testing, state_transform, num_test_episodes,
     testing.value = 0
 
 
-def find_noise_delta(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
-    orig_weights = actor.get_actor_weights(True)
-    orig_act = actor.act_batch(states)
-
-    sigma_min = 0
-    sigma_max = 100
-    sigma = sigma_max
-    step = 0
-    while step < max_steps:
-        weights = [w + np.random.normal(scale=sigma, size=np.shape(w)).astype('float32')
-                   for w in orig_weights]
-        actor.set_actor_weights(weights, True)
-        new_act = actor.act_batch(states)
-        d = np.sqrt(np.mean(np.square(new_act - orig_act)))
-
-        dd = d - target_d
-        if np.abs(dd) < tol:
-            actor.set_actor_weights(orig_weights, True)
-            return sigma
-
-        # too big sigma
-        if dd > 0:
-            sigma_max = sigma
-        # too small sigma
-        else:
-            sigma_min = sigma
-        sigma = sigma_min + (sigma_max - sigma_min) / 2
-        step += 1
-
-    actor.set_actor_weights(orig_weights, True)
-    return sigma
-
-
-def get_noisy_weights(params, sigma):
-    weights = []
-    for p in params:
-        w = p.get_value()
-        if p.name in ('gamma', 'beta'):
-            weights.append(w)
-        else:
-            weights.append(w + np.random.normal(scale=sigma, size=np.shape(w)).astype('float32'))
-    return weights
-
-
 def main():
     args = get_args()
 
@@ -187,15 +143,9 @@ def main():
         # get all data
         try:
             i, (states, actions, rewards, terminals) = data_queue.get_nowait()
+            weights_queues[i].put(weights)
             # add data to memory
             memory.add_samples(states, actions, rewards, terminals)
-
-            # get random noise for weights
-            states, _, _, _, _ = memory.random_batch(args.batch_size)
-            sigma = find_noise_delta(actor, states, 0.2)
-            print sigma
-            weights = get_noisy_weights(params_actor, sigma)
-            weights_queues[i].put(weights)
         except queue.Empty:
             pass
 
@@ -227,6 +177,7 @@ def main():
             if np.isnan(critic_loss):
                 raise Value('critic loss is nan')
             target_update_fn()
+            weights = actor.get_actor_weights()
 
         delta_steps = global_step.value - prev_steps
         prev_steps += delta_steps
