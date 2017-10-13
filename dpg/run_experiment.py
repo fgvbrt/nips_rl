@@ -63,9 +63,10 @@ def test_agent(testing, state_transform, num_test_episodes,
             if terminal:
                 break
         test_rewards.append(test_reward)
-    mean_reward = np.mean(test_rewards).item
-    std_reward = np.std(test_rewards).item
-    print 'test reward mean: {:.2f}, std: {:.2f}, all: {} '.format(mean_reward, std_reward, test_rewards)
+    mean_reward = np.mean(test_rewards)
+    std_reward = np.std(test_rewards)
+    print 'test reward mean: {:.2f}, std: {:.2f}, all: {} '.\
+        format(float(mean_reward), float(std_reward), test_rewards)
 
     if mean_reward > best_reward.value or mean_reward > 30 * env.reward_mult:
         best_reward.value = mean_reward
@@ -73,6 +74,18 @@ def test_agent(testing, state_transform, num_test_episodes,
                              format(updates.value, mean_reward))
         actor.save(fname)
     testing.value = 0
+
+
+# def find_noise_delta(actor, states):
+#     orig_weights = actor.get_actor_weights()
+#     orig_act = actor.act_batch(states)
+#
+#     sigma_min = 0
+#     sigma_max = 100
+#
+#     sigma = sigma_max
+#     while True:
+#         weights = w + np.random.normal(scale=sigma, size=) for w in orig_weights
 
 
 def main():
@@ -186,7 +199,7 @@ def main():
 
         # check if need to save and test
         if (time() - start_save)/60. > args.save_period_min:
-            fname = os.path.join(save_dir, 'weights_{}.pkl'.format(datetime.now().strftime("%d.%m.%Y-%H:%M")))
+            fname = os.path.join(save_dir, 'weights_updates_{}.pkl'.format(updates.value))
             actor.save(fname)
             start_save = time()
 

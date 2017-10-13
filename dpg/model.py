@@ -162,10 +162,15 @@ class Agent(object):
     def __init__(self, actor_fn, params_actor, params_crit):
         self._actor_fn = actor_fn
         self.params_actor = params_actor
+        self.params_actor_no_norm =  [p for p in params_actor if p.name not in ('gamma', 'beta')]
         self.params_crit = params_crit
 
-    def get_actor_weights(self):
-        return [p.get_value() for p in self.params_actor]
+    def get_actor_weights(self, exclude_norm=False):
+        if exclude_norm:
+            params = self.params_actor_no_norm
+        else:
+            params = self.params_actor
+        return [p.get_value() for p in params]
 
     def get_critic_weights(self):
         return [p.get_value() for p in self.params_crit]
@@ -175,9 +180,13 @@ class Agent(object):
         crit_weights = self.get_critic_weights()
         return actor_weights, crit_weights
 
-    def set_actor_weights(self, weights):
-        assert len(weights) == len(self.params_actor)
-        [p.set_value(w) for p, w in zip(self.params_actor, weights)]
+    def set_actor_weights(self, weights, exclude_norm=False):
+        if exclude_norm:
+            params = self.params_actor_no_norm
+        else:
+            params = self.params_actor
+        assert len(weights) == len(params)
+        [p.set_value(w) for p, w in zip(params, weights)]
 
     def set_crit_weights(self, weights):
         assert len(weights) == len(self.params_crit)
@@ -202,3 +211,6 @@ class Agent(object):
     def act(self, state):
         state = np.asarray([state])
         return self._actor_fn(state)[0]
+
+    def act_batch(self, states):
+        return self._actor_fn(states)
