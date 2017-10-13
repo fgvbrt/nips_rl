@@ -194,7 +194,7 @@ def main():
             states, _, _, _, _ = memory.random_batch(args.batch_size)
             sigma = find_noise_delta(actor, states, 0.2)
             print sigma
-            get_noisy_weights(params_actor, sigma)
+            weights = get_noisy_weights(params_actor, sigma)
             weights_queues[i].put(weights)
         except queue.Empty:
             pass
