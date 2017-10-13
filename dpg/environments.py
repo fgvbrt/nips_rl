@@ -4,12 +4,14 @@ from gym.spaces import Box, MultiBinary
 
 
 class RunEnv2(RunEnv):
-    def __init__(self, state_transform, visualize=False, max_obstacles=3, skip_frame=5):
+    def __init__(self, state_transform, visualize=False, max_obstacles=3,
+                 skip_frame=5, reward_mult=1.):
         super(RunEnv2, self).__init__(visualize, max_obstacles)
         self.state_transform = state_transform
         self.observation_space = Box(-1000, 1000, state_transform.state_size)
         self.action_space = MultiBinary(18)
-        self.skip_frame = skip_frame 
+        self.skip_frame = skip_frame
+        self.reward_mult = reward_mult
 
     def reset(self, difficulty=2, seed=None):
         s = super(RunEnv2, self).reset(difficulty=difficulty, seed=seed)
@@ -29,7 +31,7 @@ class RunEnv2(RunEnv):
             if t:
                 break            
 
-        return s, reward*100, t, info
+        return s, reward*self.reward_mult, t, info
 
 
 class JumpEnv(RunEnv):

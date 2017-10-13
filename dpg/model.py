@@ -4,42 +4,69 @@ import lasagne
 from collections import OrderedDict
 import cPickle
 import numpy as np
+from lasagne.layers import Layer, DenseLayer, NonlinearityLayer
+from lasagne import init
+
+
+class LayerNorm(Layer):
+    def __init__(self, incoming, epsilon=1e-4, beta=init.Constant(0), gamma=init.Constant(1), **kwargs):
+        super(LayerNorm, self).__init__(incoming, **kwargs)
+
+        self.epsilon = epsilon
+
+        num_inputs = self.input_shape[1]
+        if beta is None:
+            self.beta = None
+        else:
+            self.beta = self.add_param(beta, (num_inputs,), 'beta',
+                                       trainable=True, regularizable=False)
+        if gamma is None:
+            self.gamma = None
+        else:
+            self.gamma = self.add_param(gamma, (num_inputs,), 'gamma',
+                                        trainable=True, regularizable=True)
+
+    def get_output_for(self, input, **kwargs):
+        input_mean = T.mean(input, axis=1, keepdims=True)
+        input_inv_std = T.inv(T.sqrt(T.var(input, axis=1, keepdims=True) + self.epsilon))
+
+        return (input - input_mean) * input_inv_std * self.gamma + self.beta
 
 
 def build_actor(l_input, num_act, last_nonlinearity=lasagne.nonlinearities.sigmoid,
-                hid_sizes=(64, 64),
+                hid_sizes=(64, 64), layer_norm=True,
                 nonlinearity=lasagne.nonlinearities.elu):
     l_hid = l_input
     for hid_size in hid_sizes:
-        l_hid = lasagne.layers.DenseLayer(
-            l_hid, hid_size,
-            nonlinearity=nonlinearity
-        )
+        l_hid = lasagne.layers.DenseLayer(l_hid, hid_size)
+        if layer_norm:
+            l_hid = LayerNorm(l_hid)
+        l_hid = NonlinearityLayer(l_hid, nonlinearity)
 
     return lasagne.layers.DenseLayer(l_hid, num_act, nonlinearity=last_nonlinearity)
 
 
-def build_critic(l_input, hid_sizes=(64, 32),
+def build_critic(l_input, hid_sizes=(64, 32), layer_norm=True,
                  nonlinearity=lasagne.nonlinearities.elu):
     l_hid = l_input
     for hid_size in hid_sizes:
-        l_hid = lasagne.layers.DenseLayer(
-            l_hid, hid_size,
-            nonlinearity=nonlinearity
-        )
+        l_hid = lasagne.layers.DenseLayer(l_hid, hid_size)
+        if layer_norm:
+            l_hid = LayerNorm(l_hid)
+        l_hid = NonlinearityLayer(l_hid, nonlinearity)
 
     return lasagne.layers.DenseLayer(l_hid, 1, nonlinearity=None)
 
 
-def build_actor_critic(state_size, num_act):
+def build_actor_critic(state_size, num_act, layer_norm):
     # input layers
     l_states = lasagne.layers.InputLayer([None, state_size])
     l_actions = lasagne.layers.InputLayer([None, num_act])
     l_input_critic = lasagne.layers.ConcatLayer([l_states, l_actions])
     # actor layer
-    l_actor = build_actor(l_states, num_act)
+    l_actor = build_actor(l_states, num_act, layer_norm=layer_norm)
     # critic layer
-    l_critic = build_critic(l_input_critic)
+    l_critic = build_critic(l_input_critic, layer_norm=layer_norm)
     return l_states, l_actions, l_actor, l_critic
 
 
@@ -47,7 +74,8 @@ def build_model(state_size, num_act, gamma=0.99,
                 actor_lr=0.00025,
                 critic_lr=0.0005,
                 target_update_coeff=1e-4,
-                clip_delta=10.):
+                clip_delta=10.,
+                layer_norm=True):
 
     # input tensors
     states = T.matrix('states')
@@ -57,10 +85,10 @@ def build_model(state_size, num_act, gamma=0.99,
     terminals = T.col('terminals')
 
     # current network
-    l_states, l_actions, l_actor, l_critic = build_actor_critic(state_size, num_act)
+    l_states, l_actions, l_actor, l_critic = build_actor_critic(state_size, num_act, layer_norm)
     # target network
     l_states_target, l_actions_target, l_actor_target, l_critic_target =\
-        build_actor_critic(state_size, num_act)
+        build_actor_critic(state_size, num_act, layer_norm)
 
     # get current network output tensors
     actions_pred = lasagne.layers.get_output(l_actor, states)
