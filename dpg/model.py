@@ -168,12 +168,12 @@ class Agent(object):
     def __init__(self, actor_fn, params_actor, params_crit):
         self._actor_fn = actor_fn
         self.params_actor = params_actor
-        self.params_actor_no_norm = [p for p in params_actor if p.name not in ('gamma', 'beta')]
+        self.params_actor_for_noise = [p for p in params_actor if p.name in ('W', 'b')]
         self.params_crit = params_crit
 
-    def get_actor_weights(self, exclude_norm=False):
-        if exclude_norm:
-            params = self.params_actor_no_norm
+    def get_actor_weights(self, for_noise=False):
+        if for_noise:
+            params = self.params_actor_for_noise
         else:
             params = self.params_actor
         return [p.get_value() for p in params]
@@ -186,9 +186,9 @@ class Agent(object):
         crit_weights = self.get_critic_weights()
         return actor_weights, crit_weights
 
-    def set_actor_weights(self, weights, exclude_norm=False):
-        if exclude_norm:
-            params = self.params_actor_no_norm
+    def set_actor_weights(self, weights, for_noise=False):
+        if for_noise:
+            params = self.params_actor_for_noise
         else:
             params = self.params_actor
         assert len(weights) == len(params)
