@@ -83,6 +83,7 @@ class State(object):
                     self.obst_names.append('{}_{}_obst_x_start'.format(n, i))
                     self.obst_names.append('{}_{}_obst_x_end'.format(n, i))
                     self.obst_names.append('{}_{}_obst_y'.format(n, i))
+        self.obst_names.append('is_obstacle')
 
         self.predict_bodies = last_n_bodies > 0
         self.last_n_bodies = last_n_bodies
@@ -147,13 +148,15 @@ class State(object):
             Warning('more than 3 obstacles')
 
     def _get_obstacle_state_reward(self, state):
+        is_obst = float(state[-3] != 100)
 
         if self.obstacles_mode == 'exclude':
-            return [], 0
+            return [is_obst], 0.
         elif self.obstacles_mode == 'standard':
-            if state[-3]==100:
-                return [-1., 0., 0.], 0
-            return np.clip(state[-3:], -10, 10), 0
+            if not is_obst:
+                return [-1., 0., 0., is_obst], 0.
+            obst_features = np.clip(state[-3:], -10., 10.)
+            return np.append(obst_features, is_obst), 0.
         elif self.obstacles_mode == 'gird':
             mass_x = state[self.state_names.index('mass_x')]
             obst_grid = np.zeros(self.obst_grid_points, dtype=np.float32)
@@ -165,7 +168,8 @@ class State(object):
                 obst_left = max(obst_left, 0)
                 obst_right = max(obst_right, -1)
                 obst_grid[obst_left:obst_right + 1] = obst_h
-            return obst_grid, 0
+            obst_features = np.append(obst_grid, is_obst)
+            return obst_features, 0
         else:
             obst_state = []
             obst_reward = 0
@@ -189,6 +193,7 @@ class State(object):
                         if obst_reward>=0 and body_x >= (obst_x_start - obst_r/2) \
                                 and (body_x<=obst_x_end+obst_r/2) and (obst_h +obst_r/2) >= body_y:
                             obst_reward = -0.5
+            obst_state.append(is_obst)
             return np.asarray(obst_state), obst_reward
 
     def process(self, state):
