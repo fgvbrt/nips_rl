@@ -103,6 +103,11 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     total_episodes = 0
     start = time()
     action_noise = True
+
+    noise_mode = True
+    total_steps = 0
+    noise_switch_steps = 100
+
     while global_step.value < max_steps:
         seed = random.randrange(2**32-2)
         state = env.reset(seed=seed, difficulty=2)
@@ -117,14 +122,19 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
             state = np.asarray(state, dtype='float32')
 
             action = actor.act(state)
-            if action_noise:
+            if action_noise and noise_mode:
                 action += random_process.sample()
 
             next_state, reward, next_terminal, info = env.step(action)
             total_reward += reward
             total_reward_original += info['original_reward']
             steps += 1
+            total_steps += 1
             global_step.value += 1
+
+            # decide if need to switch noise
+            if total_steps % noise_switch_steps == 0:
+                noise_mode = not noise_mode
 
             # add data to buffers
             states.append(state)
