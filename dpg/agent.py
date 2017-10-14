@@ -102,6 +102,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
 
     total_episodes = 0
     start = time()
+    action_noise = True
     while global_step.value < max_steps:
         seed = random.randrange(2**32-2)
         state = env.reset(seed=seed, difficulty=2)
@@ -111,7 +112,6 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         total_reward_original = 0.
         terminal = False
         steps = 0
-        action_noise = True
         
         while not terminal:
             state = np.asarray(state, dtype='float32')

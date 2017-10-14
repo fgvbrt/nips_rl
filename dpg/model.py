@@ -29,7 +29,6 @@ class LayerNorm(Layer):
     def get_output_for(self, input, **kwargs):
         input_mean = T.mean(input, axis=1, keepdims=True)
         input_inv_std = T.inv(T.sqrt(T.var(input, axis=1, keepdims=True) + self.epsilon))
-
         return (input - input_mean) * input_inv_std * self.gamma + self.beta
 
 
