@@ -2,9 +2,9 @@ import numpy as np
 
 
 class ReplayMemory(object):
-    def __init__(self, state_size, action_size, max_steps=100000, seed=None):
+    def __init__(self, state_shape, action_size, max_steps=100000, seed=None):
         self.max_steps = max_steps
-        self.state_size = state_size
+        self.state_shape = list(state_shape)
         self.action_size = action_size
         self.bottom = 0
         self.top = 0
@@ -12,7 +12,7 @@ class ReplayMemory(object):
         self.rng = np.random.RandomState(seed)
 
         # init buffers
-        self.states = np.zeros(shape=(max_steps, state_size), dtype='float32')
+        self.states = np.zeros(shape=[max_steps] + self.state_shape, dtype='float32')
         self.actions = np.zeros(shape=(max_steps, action_size), dtype='float32')
         self.rewards = np.zeros(max_steps, dtype='float32')
         self.terminals = np.zeros(max_steps, dtype='bool')
@@ -48,8 +48,8 @@ class ReplayMemory(object):
     def add_samples(self, states, actions, rewards, terminals):
         """Add a time step record.
         Arguments:
-            state -- observed state
-            action -- action chosen by the agent
+            states -- observed states
+            actions -- actions chosen by the agent
             reward -- reward received after taking the action
             terminal -- boolean indicating whether the episode ended
             after this time step
@@ -61,7 +61,7 @@ class ReplayMemory(object):
         self.rewards.put(idxs, rewards, mode='wrap')
 
         # for states and action need to calculate idxs
-        states_start_idx = self.top * self.state_size
+        states_start_idx = self.top * np.prod(self.state_shape)
         states_end_idx = states_start_idx + np.prod(states.shape)
         states_idxs = xrange(states_start_idx, states_end_idx)
         self.states.put(states_idxs, states, mode='wrap')
@@ -87,7 +87,7 @@ class ReplayMemory(object):
             next_states for batch_size randomly chosen state transitions.
         """
         # Allocate the response.
-        states = np.zeros((batch_size, self.state_size), dtype='float32')
+        states = np.zeros(([batch_size] + self.state_shape), dtype='float32')
         actions = np.zeros((batch_size, self.action_size), dtype='float32')
         rewards = np.zeros((batch_size, 1), dtype='float32')
         next_states = np.zeros_like(states)

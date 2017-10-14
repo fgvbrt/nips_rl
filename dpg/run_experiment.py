@@ -16,6 +16,7 @@ import random
 from environments import RunEnv2
 from datetime import datetime
 from time import time
+from collections import deque
 
 
 def get_args():
@@ -24,7 +25,7 @@ def get_args():
     parser.add_argument('--num_agents', type=int, default=cpu_count()-1, help="Number of agents to run.")
     parser.add_argument('--sleep', type=int, default=0, help="Sleep time in seconds before start each worker.")
     parser.add_argument('--max_steps', type=int, default=10000000, help="Number of steps.")
-    parser.add_argument('--test_period_min', default=15, type=int, help="Test interval int min.")
+    parser.add_argument('--test_period_min', default=30, type=int, help="Test interval int min.")
     parser.add_argument('--save_period_min', default=30, type=int, help="Save interval int min.")
     parser.add_argument('--num_test_episodes', type=int, default=5, help="Number of test episodes.")
     parser.add_argument('--batch_size', type=int, default=2000, help="Batch size.")
@@ -37,13 +38,14 @@ def get_args():
     parser.add_argument('--layer_norm', action='store_true', help="Use layer normaliation.")
     parser.add_argument('--exp_name', type=str, default=datetime.now().strftime("%d.%m.%Y-%H:%M"),
                         help='Experiment name')
+    parser.add_argument('--last_n_states', type=int, default=8, help="Number of last states to feed in rnn.")
     return parser.parse_args()
 
 
-def test_agent(testing, state_transform, num_test_episodes,
+def test_agent(testing, state_transform, last_n_states, num_test_episodes,
                model_params, weights, best_reward, updates, save_dir):
     testing.value = 1
-    env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5)
+    env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5, last_n_states=last_n_states)
     test_rewards = []
 
     train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
@@ -51,17 +53,27 @@ def test_agent(testing, state_transform, num_test_episodes,
     actor = Agent(actor_fn, params_actor, params_crit)
     actor.set_actor_weights(weights)
 
+    action_deque = deque(maxlen=env.last_n_states)
+
     for ep in range(num_test_episodes):
         seed = random.randrange(2**32-2)
         state = env.reset(seed=seed, difficulty=2)
         test_reward = 0
+        for _ in range(last_n_states):
+            action_deque.append(np.zeros(18, dtype='float32'))
+
         while True:
-            state = np.asarray(state, dtype='float32')
-            action = actor.act(state)
+            action_seq = np.stack(action_deque)
+            _state = np.concatenate([state, action_seq], axis=1).astype('float32')
+
+            action = actor.act(_state)
+            action_deque.append(action)
+
             state, reward, terminal, _ = env.step(action)
             test_reward += reward
             if terminal:
                 break
+
         test_rewards.append(test_reward)
     mean_reward = np.mean(test_rewards)
     std_reward = np.std(test_rewards)
@@ -91,9 +103,11 @@ def main():
     #state_transform = StateVel(exclude_obstacles=True)
     num_actions = 18
 
+    state_shape = (args.last_n_states, state_transform.state_size + num_actions)
+
     # build model
     model_params = {
-        'state_size': state_transform.state_size,
+        'state_shape': state_shape,
         'num_act': num_actions,
         'gamma': args.gamma,
         'actor_lr': args.actor_lr,
@@ -111,7 +125,7 @@ def main():
     weights = [p.get_value() for p in params_actor]
 
     # build replay memory
-    memory = ReplayMemory(state_transform.state_size, 18, 5000000)
+    memory = ReplayMemory(state_shape, 18, 5000000)
 
     # init shared variables
     global_step = Value('i', 0)
@@ -126,8 +140,9 @@ def main():
     for i in xrange(args.num_agents):
         w_queue = Queue()
         worker = Process(target=run_agent,
-                         args=(model_params, weights, state_transform, data_queue, w_queue,
-                               i, global_step, updates, best_reward, args.max_steps)
+                         args=(model_params, weights, state_transform, args.last_n_states,
+                               data_queue, w_queue, i, global_step, updates, best_reward,
+                               args.max_steps)
                          )
         worker.daemon = True
         worker.start()
@@ -159,6 +174,11 @@ def main():
 
                 states_flip = state_transform.flip_states(states)
                 next_states_flip = state_transform.flip_states(next_states)
+                left = states_flip[..., -18:-9].copy()
+                right = states_flip[..., -9:].copy()
+                states_flip[..., -18:-9] = right
+                states_flip[..., -9:] = left
+
                 actions_flip = np.zeros_like(actions)
                 actions_flip[:, :num_actions//2] = actions[:, num_actions//2:]
                 actions_flip[:, num_actions//2:] = actions[:, :num_actions//2]
@@ -194,8 +214,9 @@ def main():
         # start new test process
         if (time() - start_test) / 60. > args.test_period_min and testing.value == 0:
             worker = Process(target=test_agent,
-                             args=(testing, state_transform, args.num_test_episodes,
-                                   model_params, weights, best_reward, updates, save_dir)
+                             args=(testing, state_transform, args.last_n_states,
+                                   args.num_test_episodes, model_params, weights,
+                                   best_reward, updates, save_dir)
                              )
             worker.daemon = True
             worker.start()

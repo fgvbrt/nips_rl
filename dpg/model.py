@@ -4,7 +4,7 @@ import lasagne
 from collections import OrderedDict
 import cPickle
 import numpy as np
-from lasagne.layers import Layer, DenseLayer, NonlinearityLayer
+from lasagne.layers import Layer, DenseLayer, NonlinearityLayer, LSTMLayer
 from lasagne import init
 
 
@@ -32,44 +32,50 @@ class LayerNorm(Layer):
         return (input - input_mean) * input_inv_std * self.gamma + self.beta
 
 
+def common_rnn(l_input, hid_size=64):
+    return LSTMLayer(l_input, hid_size, only_return_final=True, unroll_scan=True)
+
+
 def build_actor(l_input, num_act, last_nonlinearity=lasagne.nonlinearities.sigmoid,
-                hid_sizes=(64, 64), layer_norm=True,
+                hid_sizes=(32, ), layer_norm=True,
                 nonlinearity=lasagne.nonlinearities.elu):
     l_hid = l_input
     for hid_size in hid_sizes:
-        l_hid = lasagne.layers.DenseLayer(l_hid, hid_size)
+        l_hid = DenseLayer(l_hid, hid_size)
         if layer_norm:
             l_hid = LayerNorm(l_hid)
         l_hid = NonlinearityLayer(l_hid, nonlinearity)
 
-    return lasagne.layers.DenseLayer(l_hid, num_act, nonlinearity=last_nonlinearity)
+    return DenseLayer(l_hid, num_act, nonlinearity=last_nonlinearity)
 
 
-def build_critic(l_input, hid_sizes=(64, 32), layer_norm=True,
+def build_critic(l_input, hid_sizes=(32, ), layer_norm=True,
                  nonlinearity=lasagne.nonlinearities.elu):
     l_hid = l_input
     for hid_size in hid_sizes:
-        l_hid = lasagne.layers.DenseLayer(l_hid, hid_size)
+        l_hid = DenseLayer(l_hid, hid_size)
         if layer_norm:
             l_hid = LayerNorm(l_hid)
         l_hid = NonlinearityLayer(l_hid, nonlinearity)
 
-    return lasagne.layers.DenseLayer(l_hid, 1, nonlinearity=None)
+    return DenseLayer(l_hid, 1, nonlinearity=None)
 
 
-def build_actor_critic(state_size, num_act, layer_norm):
+def build_actor_critic(state_shape, num_act, layer_norm):
     # input layers
-    l_states = lasagne.layers.InputLayer([None, state_size])
+    l_states_in = lasagne.layers.InputLayer([None] + list(state_shape))
+    l_states = common_rnn(l_states_in)
     l_actions = lasagne.layers.InputLayer([None, num_act])
+
     l_input_critic = lasagne.layers.ConcatLayer([l_states, l_actions])
     # actor layer
     l_actor = build_actor(l_states, num_act, layer_norm=layer_norm)
     # critic layer
     l_critic = build_critic(l_input_critic, layer_norm=layer_norm)
-    return l_states, l_actions, l_actor, l_critic
+    return l_states_in, l_actions, l_actor, l_critic
 
 
-def build_model(state_size, num_act, gamma=0.99,
+def build_model(state_shape, num_act, gamma=0.99,
                 actor_lr=0.00025,
                 critic_lr=0.0005,
                 target_update_coeff=1e-4,
@@ -77,17 +83,17 @@ def build_model(state_size, num_act, gamma=0.99,
                 layer_norm=True):
 
     # input tensors
-    states = T.matrix('states')
-    next_states = T.matrix('next_states')
+    states = T.tensor3('states')
+    next_states = T.tensor3('next_states')
     actions = T.matrix('actions')
     rewards = T.col('rewards')
     terminals = T.col('terminals')
 
     # current network
-    l_states, l_actions, l_actor, l_critic = build_actor_critic(state_size, num_act, layer_norm)
+    l_states, l_actions, l_actor, l_critic = build_actor_critic(state_shape, num_act, layer_norm)
     # target network
     l_states_target, l_actions_target, l_actor_target, l_critic_target =\
-        build_actor_critic(state_size, num_act, layer_norm)
+        build_actor_critic(state_shape, num_act, layer_norm)
 
     # get current network output tensors
     actions_pred = lasagne.layers.get_output(l_actor, states)
@@ -118,11 +124,12 @@ def build_model(state_size, num_act, gamma=0.99,
 
     # get params
     params_actor = lasagne.layers.get_all_params(l_actor)
-    params_crit = lasagne.layers.get_all_params(l_critic)
+    params_crit = [p for p in lasagne.layers.get_all_params(l_critic) if p not in params_actor] # critic doesn't update rnn
     params = params_actor + params_crit
     # get target params
-    params_target = lasagne.layers.get_all_params(l_actor_target) + \
-                    lasagne.layers.get_all_params(l_critic_target)
+    params_actor_target = lasagne.layers.get_all_params(l_actor_target)
+    params_crit_target = [p for p in lasagne.layers.get_all_params(l_critic_target) if p not in params_actor_target]
+    params_target = params_actor_target + params_crit_target
 
     # set critic target to critic params
     for param, param_target in zip(params, params_target):
@@ -161,7 +168,7 @@ class Agent(object):
     def __init__(self, actor_fn, params_actor, params_crit):
         self._actor_fn = actor_fn
         self.params_actor = params_actor
-        self.params_actor_no_norm =  [p for p in params_actor if p.name not in ('gamma', 'beta')]
+        self.params_actor_no_norm = [p for p in params_actor if p.name not in ('gamma', 'beta')]
         self.params_crit = params_crit
 
     def get_actor_weights(self, exclude_norm=False):

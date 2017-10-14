@@ -228,14 +228,14 @@ class State(object):
         return state.ravel()
 
     def flip_states(self, states, copy=True):
-        assert np.ndim(states) == 2
+        assert np.ndim(states) >= 2
         states = np.asarray(states, dtype=np.float32)
         if copy:
             states = states.copy()
-        left = states[:, self.left_idxs]
-        right = states[:, self.right_idxs]
-        states[:, self.left_idxs] = right
-        states[:, self.right_idxs] = left
+        left = states[..., self.left_idxs]
+        right = states[..., self.right_idxs]
+        states[..., self.left_idxs] = right
+        states[..., self.right_idxs] = left
         return states
 
     @property
