@@ -76,10 +76,7 @@ def get_noisy_weights(params, sigma):
     weights = []
     for p in params:
         w = p.get_value()
-        if p.name in ('gamma', 'beta'):
-            weights.append(w)
-        else:
-            weights.append(w + np.random.normal(scale=sigma, size=np.shape(w)).astype('float32'))
+        weights.append(w + np.random.normal(scale=sigma, size=np.shape(p.get_value())).astype('float32'))
     return weights
 
 
@@ -177,8 +174,8 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         action_noise = np.random.rand() < 0.7
         if not action_noise:
             weights_sigma = find_noise_delta(actor, states_np, sigma/2)
-            weights = get_noisy_weights(actor.params_actor, weights_sigma)
-            actor.set_actor_weights(weights)
+            weights = get_noisy_weights(actor.params_actor_for_noise, weights_sigma)
+            actor.set_actor_weights(weights, True)
 
         # clear buffers
         del states[:]
