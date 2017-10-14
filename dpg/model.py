@@ -13,16 +13,17 @@ class LayerNorm(Layer):
         super(LayerNorm, self).__init__(incoming, **kwargs)
 
         self.epsilon = epsilon
-
+        
+        n_features = self.input_shape[1]
         if beta is None:
             self.beta = None
         else:
-            self.beta = self.add_param(beta, (1,), 'beta',
+            self.beta = self.add_param(beta, (n_features,), 'beta',
                                        trainable=True, regularizable=False)
         if gamma is None:
             self.gamma = None
         else:
-            self.gamma = self.add_param(gamma, (1,), 'gamma',
+            self.gamma = self.add_param(gamma, (n_features,), 'gamma',
                                         trainable=True, regularizable=True)
 
     def get_output_for(self, input, **kwargs):
