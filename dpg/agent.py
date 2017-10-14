@@ -178,9 +178,9 @@ def run_agent(model_params, weights, state_transform, last_n_states, data_queue,
         # receive weights and set params to weights
         weights = weights_queue.get()
         actor.set_actor_weights(weights)
-        action_noise = np.random.rand() < 0.8
+        action_noise = np.random.rand() < 0.7
         if not action_noise:
-            weights_sigma = find_noise_delta(actor, states_np, sigma/2)
+            weights_sigma = find_noise_delta(actor, states_np, sigma)
             weights = get_noisy_weights(actor.params_actor_for_noise, weights_sigma)
             actor.set_actor_weights(weights, True)
 
