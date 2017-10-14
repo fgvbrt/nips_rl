@@ -94,7 +94,10 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     noise_mode = True
     total_steps = 0
     noise_period = 100
-    max_sigma = 0.3
+    max_sigma = 0.5
+    min_max_sigma = 0.2
+    sigma_steps_annealing = 1000000
+    sigma_step = (max_sigma - min_max_sigma) / sigma_steps_annealing
 
     env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5)
     #random_process = RandomActivation(size=env.noutput)
@@ -136,6 +139,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
             steps += 1
             total_steps += 1
             global_step.value += 1
+            max_sigma = max(min_max_sigma, max_sigma-sigma_step)
 
             # add data to buffers
             states.append(state)
