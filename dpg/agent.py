@@ -111,12 +111,14 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         total_reward_original = 0.
         terminal = False
         steps = 0
+        action_noise = True
         
         while not terminal:
             state = np.asarray(state, dtype='float32')
 
             action = actor.act(state)
-            action += random_process.sample()
+            if action_noise:
+                action += random_process.sample()
 
             next_state, reward, next_terminal, info = env.step(action)
             total_reward += reward
@@ -156,9 +158,11 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         # receive weights and set params to weights
         weights = weights_queue.get()
         actor.set_actor_weights(weights)
-        sigma = find_noise_delta(actor, states_np, random_process.current_sigma)
-        weights = get_noisy_weights(actor.params_actor, sigma)
-        actor.set_actor_weights(weights)
+        action_noise = np.random.rand() < 0.7
+        if not action_noise:
+            sigma = find_noise_delta(actor, states_np, random_process.current_sigma)
+            weights = get_noisy_weights(actor.params_actor, sigma)
+            actor.set_actor_weights(weights)
 
         # clear buffers
         del states[:]
