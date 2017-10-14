@@ -157,7 +157,6 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         weights = weights_queue.get()
         actor.set_actor_weights(weights)
         sigma = find_noise_delta(actor, states_np, random_process.current_sigma)
-        print(sigma)
         weights = get_noisy_weights(actor.params_actor, sigma)
         actor.set_actor_weights(weights)
 
