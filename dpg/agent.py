@@ -5,6 +5,7 @@ from random_process import OrnsteinUhlenbeckProcess, RandomActivation
 from time import time
 import cPickle
 from model import Agent, build_model
+from scipy.signal import sawtooth
 
 
 def elu(x):
@@ -90,10 +91,15 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     actor = Agent(actor_fn, params_actor, params_crit)
     actor.set_actor_weights(weights)
 
+    noise_mode = True
+    total_steps = 0
+    noise_period = 100
+    max_sigma = 0.3
+
     env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5)
     #random_process = RandomActivation(size=env.noutput)
-    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.2, size=env.noutput,
-                                              sigma_min=0.15, n_steps_annealing=1e5)
+    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=max_sigma, size=env.noutput,
+                                              sigma_min=0.1, n_steps_annealing=1e5)
     # prepare buffers for data
     states = []
     actions = []
@@ -103,10 +109,6 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     total_episodes = 0
     start = time()
     action_noise = True
-
-    noise_mode = True
-    total_steps = 0
-    noise_switch_steps = 100
 
     while global_step.value < max_steps:
         seed = random.randrange(2**32-2)
@@ -119,11 +121,14 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         steps = 0
         
         while not terminal:
+
+            sigma = (sawtooth(1. * total_steps * 4 * np.pi / noise_period) + 1) / 2 * max_sigma
+
             state = np.asarray(state, dtype='float32')
 
             action = actor.act(state)
             if action_noise and noise_mode:
-                action += random_process.sample()
+                action += random_process.sample(sigma)
 
             next_state, reward, next_terminal, info = env.step(action)
             total_reward += reward
@@ -131,10 +136,6 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
             steps += 1
             total_steps += 1
             global_step.value += 1
-
-            # decide if need to switch noise
-            if total_steps % noise_switch_steps == 0:
-                noise_mode = not noise_mode
 
             # add data to buffers
             states.append(state)
@@ -168,10 +169,10 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         # receive weights and set params to weights
         weights = weights_queue.get()
         actor.set_actor_weights(weights)
-        action_noise = np.random.rand() < 0.7
+        action_noise = np.random.rand() < 0.5
         if not action_noise:
-            sigma = find_noise_delta(actor, states_np, random_process.current_sigma)
-            weights = get_noisy_weights(actor.params_actor, sigma)
+            weights_sigma = find_noise_delta(actor, states_np, sigma/10)
+            weights = get_noisy_weights(actor.params_actor, weights_sigma)
             actor.set_actor_weights(weights)
 
         # clear buffers
