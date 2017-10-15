@@ -56,13 +56,11 @@ def test_agent(testing, state_transform, num_test_episodes,
         state = env.reset(seed=seed, difficulty=2)
         test_reward = 0
 
-        action_seq = [np.zeros(18, dtype='float32')] * env.skip_frame
+        prev_action = np.zeros(18, dtype='float32')
 
         while True:
-            _state = np.concatenate([state, action_seq], axis=1).astype('float32')
-
-            action = actor.act(_state)
-            action_seq = [action] * env.skip_frame
+            action = actor.act(state, prev_action)
+            prev_action = action
 
             state, reward, terminal, _ = env.step(action)
             test_reward += reward
@@ -70,6 +68,7 @@ def test_agent(testing, state_transform, num_test_episodes,
                 break
 
         test_rewards.append(test_reward)
+
     mean_reward = np.mean(test_rewards)
     std_reward = np.std(test_rewards)
     print 'test reward mean: {:.2f}, std: {:.2f}, all: {} '.\
@@ -98,7 +97,7 @@ def main():
     #state_transform = StateVel(exclude_obstacles=True)
     num_actions = 18
 
-    state_shape = (5, state_transform.state_size + num_actions)
+    state_shape = (5, state_transform.state_size)
 
     # build model
     model_params = {
@@ -155,7 +154,11 @@ def main():
             i, (states, actions, rewards, terminals) = data_queue.get_nowait()
             weights_queues[i].put(weights)
             # add data to memory
-            memory.add_samples(states, actions, rewards, terminals)
+            actions_prev = actions.copy()
+            actions_prev[1:] = actions[:-1]
+            actions_prev[0] = 0
+
+            memory.add_samples(states, actions_prev, actions, rewards, terminals)
         except queue.Empty:
             pass
 
@@ -165,25 +168,26 @@ def main():
             batch = memory.random_batch(args.batch_size)
 
             if np.random.rand() < args.flip_prob:
-                states, actions, rewards, terminals, next_states = batch
+                states, prev_actions, actions, rewards, terminals, next_states = batch
 
                 states_flip = state_transform.flip_states(states)
                 next_states_flip = state_transform.flip_states(next_states)
-                left = states_flip[..., -18:-9].copy()
-                right = states_flip[..., -9:].copy()
-                states_flip[..., -18:-9] = right
-                states_flip[..., -9:] = left
+
+                prev_actions_flip = np.zeros_like(prev_actions)
+                prev_actions_flip[:, :num_actions // 2] = prev_actions_flip[:, num_actions // 2:]
+                prev_actions_flip[:, num_actions // 2:] = prev_actions_flip[:, :num_actions // 2]
 
                 actions_flip = np.zeros_like(actions)
                 actions_flip[:, :num_actions//2] = actions[:, num_actions//2:]
                 actions_flip[:, num_actions//2:] = actions[:, :num_actions//2]
 
                 states_all = np.concatenate((states, states_flip))
+                prev_actions_all = np.concatenate((prev_actions, prev_actions_flip))
                 actions_all = np.concatenate((actions, actions_flip))
                 rewards_all = np.tile(rewards.ravel(), 2).reshape(-1, 1)
                 terminals_all = np.tile(terminals.ravel(), 2).reshape(-1, 1)
                 next_states_all = np.concatenate((next_states, next_states_flip))
-                batch = (states_all, actions_all, rewards_all, terminals_all, next_states_all)
+                batch = (states_all, prev_actions_all, actions_all, rewards_all, terminals_all, next_states_all)
 
             actor_loss, critic_loss = train_fn(*batch)
             updates.value += 1
@@ -209,9 +213,8 @@ def main():
         # start new test process
         if (time() - start_test) / 60. > args.test_period_min and testing.value == 0:
             worker = Process(target=test_agent,
-                             args=(testing, state_transform, args.last_n_states,
-                                   args.num_test_episodes, model_params, weights,
-                                   best_reward, updates, save_dir)
+                             args=(testing, state_transform, args.num_test_episodes,
+                                   model_params, weights, best_reward, updates, save_dir)
                              )
             worker.daemon = True
             worker.start()

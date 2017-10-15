@@ -14,6 +14,7 @@ class ReplayMemory(object):
         # init buffers
         self.states = np.zeros(shape=[max_steps] + self.state_shape, dtype='float32')
         self.actions = np.zeros(shape=(max_steps, action_size), dtype='float32')
+        self.prev_actions = np.zeros(shape=(max_steps, action_size), dtype='float32')
         self.rewards = np.zeros(max_steps, dtype='float32')
         self.terminals = np.zeros(max_steps, dtype='bool')
 
@@ -25,7 +26,7 @@ class ReplayMemory(object):
     def __len__(self):
         return self.size
 
-    def add_sample(self, state, action, reward, terminal):
+    def add_sample(self, state, prev_action, action, reward, terminal):
         """Add a time step record.
         Arguments:
             state -- observed state
@@ -35,6 +36,7 @@ class ReplayMemory(object):
             after this time step
         """
         self.states[self.top] = state
+        self.prev_actions[self.top] = prev_action
         self.terminals[self.top] = terminal
         self.actions[self.top] = action
         self.rewards[self.top] = reward
@@ -45,7 +47,7 @@ class ReplayMemory(object):
             self.size += 1
         self.top = (self.top + 1) % self.max_steps
 
-    def add_samples(self, states, actions, rewards, terminals):
+    def add_samples(self, states, prev_actions, actions, rewards, terminals):
         """Add a time step record.
         Arguments:
             states -- observed states
@@ -70,6 +72,7 @@ class ReplayMemory(object):
         act_end_idx = act_start_idx + np.prod(actions.shape)
         act_idxs = xrange(act_start_idx, act_end_idx)
         self.actions.put(act_idxs, actions, mode='wrap')
+        self.prev_actions.put(act_idxs, prev_actions, mode='wrap')
 
         if self.size == self.max_steps:
             self.bottom = (self.bottom + n) % self.max_steps
@@ -88,6 +91,7 @@ class ReplayMemory(object):
         """
         # Allocate the response.
         states = np.zeros(([batch_size] + self.state_shape), dtype='float32')
+        prev_actions = np.zeros((batch_size, self.action_size), dtype='float32')
         actions = np.zeros((batch_size, self.action_size), dtype='float32')
         rewards = np.zeros((batch_size, 1), dtype='float32')
         next_states = np.zeros_like(states)
@@ -106,13 +110,14 @@ class ReplayMemory(object):
 
             # Add the state transition to the response.
             states[count] = self.states.take(index, axis=0, mode='wrap')
+            prev_actions[count] = self.prev_actions.take(index, axis=0, mode='wrap')
             actions[count] = self.actions.take(index, axis=0, mode='wrap')
             rewards[count] = self.rewards.take(index, axis=0, mode='wrap')
             next_states[count] = self.states.take(index+1, axis=0, mode='wrap')
             terminals[count] = self.terminals.take(index+1, axis=0, mode='wrap')
             count += 1
 
-        return states, actions, rewards, terminals, next_states
+        return states, prev_actions, actions, rewards, terminals, next_states
 
     def random_batch2(self, batch_size):
         """Return corresponding states, actions, rewards, and
@@ -129,12 +134,13 @@ class ReplayMemory(object):
 
         # Add the state transition to the response.
         states = self.states.take(idxs, axis=0, mode='wrap')
+        prev_actions = self.prev_actions.take(idxs, axis=0, mode='wrap')
         actions = self.actions.take(idxs, axis=0, mode='wrap')
         rewards = self.rewards.take(idxs, axis=0, mode='wrap').reshape(-1, 1)
         next_states = self.states.take(idxs+1, axis=0, mode='wrap')
         terminals = self.terminals.take(idxs+1, axis=0, mode='wrap').reshape(-1, 1)
 
-        return states[m], actions[m], rewards[m], terminals[m], next_states[m]
+        return states[m], prev_actions[m], actions[m], rewards[m], terminals[m], next_states[m]
 
     def load(self, filename):
         tmp_dict = np.load(filename)

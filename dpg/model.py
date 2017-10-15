@@ -32,8 +32,10 @@ class LayerNorm(Layer):
         return (input - input_mean) * input_inv_std * self.gamma + self.beta
 
 
-def common_rnn(l_input, hid_size=64):
-    return LSTMLayer(l_input, hid_size, only_return_final=True, unroll_scan=True)
+def common_rnn(l_input, l_actions_prev, hid_size=64):
+    l_hid_init = DenseLayer(l_actions_prev, hid_size, nonlinearity=lasagne.nonlinearities.sigmoid)
+    return LSTMLayer(l_input, hid_size, hid_init=l_hid_init,
+                     only_return_final=True, unroll_scan=True)
 
 
 def build_actor(l_input, num_act, last_nonlinearity=lasagne.nonlinearities.sigmoid,
@@ -64,7 +66,8 @@ def build_critic(l_input, hid_sizes=(32, ), layer_norm=True,
 def build_actor_critic(state_shape, num_act, layer_norm):
     # input layers
     l_states_in = lasagne.layers.InputLayer([None] + list(state_shape))
-    l_states = common_rnn(l_states_in)
+    l_actions_prev = lasagne.layers.InputLayer([None, num_act])
+    l_states = common_rnn(l_states_in, l_actions_prev)
     l_actions = lasagne.layers.InputLayer([None, num_act])
 
     l_input_critic = lasagne.layers.ConcatLayer([l_states, l_actions])
@@ -72,7 +75,7 @@ def build_actor_critic(state_shape, num_act, layer_norm):
     l_actor = build_actor(l_states, num_act, layer_norm=layer_norm)
     # critic layer
     l_critic = build_critic(l_input_critic, layer_norm=layer_norm)
-    return l_states_in, l_actions, l_actor, l_critic
+    return l_states_in, l_actions_prev, l_actions, l_actor, l_critic
 
 
 def build_model(state_shape, num_act, gamma=0.99,
@@ -84,27 +87,34 @@ def build_model(state_shape, num_act, gamma=0.99,
 
     # input tensors
     states = T.tensor3('states')
+    prev_actions = T.matrix('actions')
     next_states = T.tensor3('next_states')
     actions = T.matrix('actions')
     rewards = T.col('rewards')
     terminals = T.col('terminals')
 
     # current network
-    l_states, l_actions, l_actor, l_critic = build_actor_critic(state_shape, num_act, layer_norm)
+    l_states, l_actions_prev, l_actions, l_actor, l_critic = build_actor_critic(state_shape, num_act, layer_norm)
     # target network
-    l_states_target, l_actions_target, l_actor_target, l_critic_target =\
+    l_states_target, l_actions_prev_target, l_actions_target, l_actor_target, l_critic_target =\
         build_actor_critic(state_shape, num_act, layer_norm)
 
     # get current network output tensors
-    actions_pred = lasagne.layers.get_output(l_actor, states)
-    q_vals = lasagne.layers.get_output(l_critic, {l_states: states, l_actions: actions})
-    v_vals = lasagne.layers.get_output(l_critic, {l_states: states, l_actions: actions_pred})
+    actions_pred = lasagne.layers.get_output(l_actor, {l_states: states, l_actions_prev: prev_actions})
+    q_vals = lasagne.layers.get_output(l_critic, {l_states: states, l_actions_prev: prev_actions, l_actions: actions})
+    v_vals = lasagne.layers.get_output(l_critic, {l_states: states, l_actions_prev: prev_actions, l_actions: actions_pred})
 
     # get target network q-values
-    actions_pred_target = lasagne.layers.get_output(l_actor_target, next_states)
+    actions_pred_target = lasagne.layers.get_output(
+        l_actor_target,
+        {
+            l_states_target: next_states,
+            l_actions_prev_target: actions
+        }
+    )
     v_vals_target = lasagne.layers.get_output(
         l_critic_target,
-        {l_states_target: next_states, l_actions_target: actions_pred_target})
+        {l_states_target: next_states, l_actions_prev_target: actions, l_actions_target: actions_pred_target})
 
     # target for q_vals
     target = gamma*v_vals_target*(1.-terminals) + rewards
@@ -158,9 +168,9 @@ def build_model(state_shape, num_act, gamma=0.99,
         target_updates[param_target] = update
 
     # compile theano functions
-    train_fn = theano.function([states, actions, rewards, terminals, next_states],
+    train_fn = theano.function([states, prev_actions, actions, rewards, terminals, next_states],
                                [actor_loss, critic_loss], updates=updates)
-    actor_fn = theano.function([states], actions_pred)
+    actor_fn = theano.function([states, prev_actions], actions_pred)
     target_update_fn = theano.function([], updates=target_updates)
 
     return train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr
@@ -216,9 +226,12 @@ class Agent(object):
             self.set_actor_weights(actor_weights)
             self.set_crit_weights(critic_wieghts)
 
-    def act(self, state):
-        state = np.asarray([state])
-        return self._actor_fn(state)[0]
+    def act(self, state, prev_action):
+        state = np.asarray([state], dtype='float32')
+        prev_action = np.asarray([prev_action], dtype='float32')
+        return self._actor_fn(state, prev_action)[0]
 
-    def act_batch(self, states):
-        return self._actor_fn(states)
+    def act_batch(self, states, prev_actions):
+        states = np.asarray(states, dtype='float32')
+        prev_actions = np.asarray(prev_actions, dtype='float32')
+        return self._actor_fn(states, prev_actions)

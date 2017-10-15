@@ -42,7 +42,7 @@ class ActorNumpy(object):
 
 def find_noise_delta(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
     orig_weights = actor.get_actor_weights(True)
-    orig_act = actor.act_batch(states)
+    orig_act = actor.act_batch(*states)
 
     sigma_min = 0.
     sigma_max = 100.
@@ -52,7 +52,7 @@ def find_noise_delta(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
         weights = [w + np.random.normal(scale=sigma, size=np.shape(w)).astype('float32')
                    for w in orig_weights]
         actor.set_actor_weights(weights, True)
-        new_act = actor.act_batch(states)
+        new_act = actor.act_batch(*states)
         d = np.sqrt(np.mean(np.square(new_act - orig_act)))
 
         dd = d - target_d
@@ -90,7 +90,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     actor.set_actor_weights(weights)
 
     total_steps = 0
-    noise_period = 100
+    noise_period = 200
     max_sigma_cur = 0.2
     max_sigma_end = 0.1
     min_sigma = 0.1
@@ -121,19 +121,17 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         steps = 0
 
         # deque with zeros
-        action_seq = [np.zeros(18, dtype='float32')] * env.skip_frame
+        action_prev = np.zeros(18, dtype='float32')
 
         while not terminal:
 
             sigma = (sawtooth(1. * total_steps * 4 * np.pi / noise_period) + 1.) / 2 * max_sigma_cur
             sigma = np.clip(sigma, min_sigma, max_sigma_cur)
 
-            _state = np.concatenate([state, action_seq], axis=1).astype('float32')
-
-            action = actor.act(_state)
+            action = actor.act(state, action_prev)
             if action_noise:
-                action += random_process.sample()
-            action_seq = [action] * env.skip_frame
+                action += random_process.sample(sigma)
+            action_prev = action
 
             next_state, reward, next_terminal, info = env.step(action)
             total_reward += reward
@@ -144,7 +142,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
             max_sigma_cur = max(max_sigma_end, max_sigma_cur-sigma_step)
 
             # add data to buffers
-            states.append(_state)
+            states.append(state)
             actions.append(action)
             rewards.append(reward)
             terminals.append(terminal)
@@ -158,12 +156,13 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         total_episodes += 1
 
         # add data to buffers after episode end
-        states.append(_state)
+        states.append(state)
         actions.append(np.zeros(env.noutput))
         rewards.append(0)
         terminals.append(terminal)
 
         states_np = np.asarray(states).astype('float32')
+        actions_np = np.asarray(actions).astype('float32')
         data = (states_np,
                 np.asarray(actions).astype('float32'),
                 np.asarray(rewards).astype('float32'),
@@ -175,9 +174,13 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         # receive weights and set params to weights
         weights = weights_queue.get()
         actor.set_actor_weights(weights)
-        action_noise = np.random.rand() < 0.7
+        action_noise = np.random.rand() < 1.1
         if not action_noise:
-            weights_sigma = find_noise_delta(actor, states_np, sigma)
+            _actions = actions_np.copy()
+            _actions[1:] = actions_np[:-1]
+            _actions[0] = 0
+
+            weights_sigma = find_noise_delta(actor, (states_np, _actions), sigma)
             weights = get_noisy_weights(actor.params_actor_for_noise, weights_sigma)
             actor.set_actor_weights(weights, True)
 

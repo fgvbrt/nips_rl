@@ -1,6 +1,7 @@
 import numpy as np
 from osim.env import RunEnv
 from gym.spaces import Box, MultiBinary
+from collections import deque
 
 
 class RunEnv2(RunEnv):
@@ -12,28 +13,31 @@ class RunEnv2(RunEnv):
         self.action_space = MultiBinary(18)
         self.skip_frame = skip_frame
         self.reward_mult = reward_mult
+        self.deque = deque(maxlen=self.skip_frame)
 
     def reset(self, difficulty=2, seed=None):
         s = super(RunEnv2, self).reset(difficulty=difficulty, seed=seed)
         self.state_transform.reset()
         s, _ = self.state_transform.process(s)
-        return np.stack([s]*self.skip_frame)
+        for _ in range(self.skip_frame):
+            self.deque.append(s)
+        return np.stack(self.deque)
 
     def _step(self, action):
         action = np.clip(action, 0, 1)
         info = {'original_reward': 0}
         reward = 0.
-        states = []
+
         for _ in range(self.skip_frame):
             s, r, t, _ = super(RunEnv2, self)._step(action)
             info['original_reward'] += r
             s, obst_rew = self.state_transform.process(s)
             reward += r + obst_rew
-            states.append(s)
+            self.deque.append(s)
             if t:
                 break
 
-        return np.stack(states), reward*self.reward_mult, t, info
+        return np.stack(self.deque), reward*self.reward_mult, t, info
 
 
 class JumpEnv(RunEnv):
