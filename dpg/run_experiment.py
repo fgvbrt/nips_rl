@@ -214,8 +214,8 @@ def main():
         # start new test process
         if (time() - start_test) / 60. > args.test_period_min and testing.value == 0:
             worker = Process(target=test_agent,
-                             args=(testing, state_transform, args.last_n_states,
-                                   args.num_test_episodes, model_params, weights,
+                             args=(testing, state_transform, args.num_test_episodes, 
+                                   model_params, weights,
                                    best_reward, updates, save_dir)
                              )
             worker.daemon = True

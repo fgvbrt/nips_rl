@@ -91,7 +91,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
 
     total_steps = 0
     noise_period = 100
-    max_sigma_cur = 0.2
+    max_sigma_cur = 0.3
     max_sigma_end = 0.1
     min_sigma = 0.1
     sigma_steps_annealing = 1000000
@@ -175,7 +175,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         # receive weights and set params to weights
         weights = weights_queue.get()
         actor.set_actor_weights(weights)
-        action_noise = np.random.rand() < 0.7
+        action_noise = np.random.rand() < 1.7
         if not action_noise:
             weights_sigma = find_noise_delta(actor, states_np, sigma)
             weights = get_noisy_weights(actor.params_actor_for_noise, weights_sigma)
