@@ -147,7 +147,7 @@ def run_agent(model_params, weights, state_transform, last_n_states, data_queue,
             max_sigma_cur = max(max_sigma_end, max_sigma_cur-sigma_step)
 
             # add data to buffers
-            states.append(_state)
+            states.append(state[-1])
             actions.append(action)
             rewards.append(reward)
             terminals.append(terminal)
@@ -161,13 +161,12 @@ def run_agent(model_params, weights, state_transform, last_n_states, data_queue,
         total_episodes += 1
 
         # add data to buffers after episode end
-        states.append(_state)
+        states.append(state[-1])
         actions.append(np.zeros(env.noutput))
         rewards.append(0)
         terminals.append(terminal)
 
-        states_np = np.asarray(states).astype('float32')
-        data = (states_np,
+        data = (np.asarray(states).astype('float32'),
                 np.asarray(actions).astype('float32'),
                 np.asarray(rewards).astype('float32'),
                 np.asarray(terminals).astype('float32'),
@@ -178,11 +177,11 @@ def run_agent(model_params, weights, state_transform, last_n_states, data_queue,
         # receive weights and set params to weights
         weights = weights_queue.get()
         actor.set_actor_weights(weights)
-        action_noise = np.random.rand() < 0.7
-        if not action_noise:
-            weights_sigma = find_noise_delta(actor, states_np, sigma)
-            weights = get_noisy_weights(actor.params_actor_for_noise, weights_sigma)
-            actor.set_actor_weights(weights, True)
+        # action_noise = np.random.rand() < 0.7
+        # if not action_noise:
+        #     weights_sigma = find_noise_delta(actor, states_np, sigma)
+        #     weights = get_noisy_weights(actor.params_actor_for_noise, weights_sigma)
+        #     actor.set_actor_weights(weights, True)
 
         # clear buffers
         del states[:]

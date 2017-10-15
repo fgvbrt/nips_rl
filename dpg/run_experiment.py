@@ -88,6 +88,24 @@ def test_agent(testing, state_transform, last_n_states, num_test_episodes,
     testing.value = 0
 
 
+def make_rnn_state(states, actions, n):
+    n_samples, num_features = states.shape
+    n_samples, num_actions = actions.shape
+
+    first_actions = np.zeros((n, num_actions), dtype='float32')
+    actions = np.concatenate([first_actions, actions[:-1]], axis=0)
+
+    first_states = np.tile(states[0], n-1).reshape(-1, num_features)
+    states = np.concatenate([first_states, states])
+
+    states = np.concatenate([states, actions], axis=1)
+
+    new_states = []
+    for i in range(n_samples):
+        new_states.append(states[i:i+n])
+    return np.asarray(new_states)
+
+
 def main():
     args = get_args()
 
@@ -160,6 +178,7 @@ def main():
             i, (states, actions, rewards, terminals) = data_queue.get_nowait()
             weights_queues[i].put(weights)
             # add data to memory
+            states = make_rnn_state(states, actions, args.last_n_states)
             memory.add_samples(states, actions, rewards, terminals)
         except queue.Empty:
             pass
