@@ -81,7 +81,7 @@ def get_noisy_weights(params, sigma):
     return weights
 
 
-def run_agent(model_params, weights, state_transform, last_n_states, data_queue, weights_queue,
+def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
               process, global_step, updates, best_reward, max_steps=10000000):
 
     train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
@@ -97,8 +97,7 @@ def run_agent(model_params, weights, state_transform, last_n_states, data_queue,
     sigma_steps_annealing = 1000000
     sigma_step = (max_sigma_cur - max_sigma_end) / sigma_steps_annealing
 
-    env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5, last_n_states=last_n_states)
-    action_deque = deque(maxlen=env.last_n_states)
+    env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5)
     random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=max_sigma_cur, size=env.noutput,
                                               sigma_min=max_sigma_end, n_steps_annealing=1e5)
     # prepare buffers for data
@@ -122,21 +121,19 @@ def run_agent(model_params, weights, state_transform, last_n_states, data_queue,
         steps = 0
 
         # deque with zeros
-        for _ in range(last_n_states):
-            action_deque.append(np.zeros(18, dtype='float32'))
+        action_seq = [np.zeros(18, dtype='float32')] * env.skip_frame
 
         while not terminal:
 
             sigma = (sawtooth(1. * total_steps * 4 * np.pi / noise_period) + 1.) / 2 * max_sigma_cur
             sigma = np.clip(sigma, min_sigma, max_sigma_cur)
 
-            action_seq = np.stack(action_deque)
             _state = np.concatenate([state, action_seq], axis=1).astype('float32')
 
             action = actor.act(_state)
             if action_noise:
-                action += random_process.sample(sigma)
-            action_deque.append(action)
+                action += random_process.sample()
+            action_seq = [action] * env.skip_frame
 
             next_state, reward, next_terminal, info = env.step(action)
             total_reward += reward

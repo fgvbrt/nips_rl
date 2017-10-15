@@ -16,7 +16,6 @@ import random
 from environments import RunEnv2
 from datetime import datetime
 from time import time
-from collections import deque
 
 
 def get_args():
@@ -38,14 +37,13 @@ def get_args():
     parser.add_argument('--layer_norm', action='store_true', help="Use layer normaliation.")
     parser.add_argument('--exp_name', type=str, default=datetime.now().strftime("%d.%m.%Y-%H:%M"),
                         help='Experiment name')
-    parser.add_argument('--last_n_states', type=int, default=8, help="Number of last states to feed in rnn.")
     return parser.parse_args()
 
 
-def test_agent(testing, state_transform, last_n_states, num_test_episodes,
+def test_agent(testing, state_transform, num_test_episodes,
                model_params, weights, best_reward, updates, save_dir):
     testing.value = 1
-    env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5, last_n_states=last_n_states)
+    env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5)
     test_rewards = []
 
     train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
@@ -53,21 +51,18 @@ def test_agent(testing, state_transform, last_n_states, num_test_episodes,
     actor = Agent(actor_fn, params_actor, params_crit)
     actor.set_actor_weights(weights)
 
-    action_deque = deque(maxlen=env.last_n_states)
-
     for ep in range(num_test_episodes):
         seed = random.randrange(2**32-2)
         state = env.reset(seed=seed, difficulty=2)
         test_reward = 0
-        for _ in range(last_n_states):
-            action_deque.append(np.zeros(18, dtype='float32'))
+
+        action_seq = [np.zeros(18, dtype='float32')] * env.skip_frame
 
         while True:
-            action_seq = np.stack(action_deque)
             _state = np.concatenate([state, action_seq], axis=1).astype('float32')
 
             action = actor.act(_state)
-            action_deque.append(action)
+            action_seq = [action] * env.skip_frame
 
             state, reward, terminal, _ = env.step(action)
             test_reward += reward
@@ -103,7 +98,7 @@ def main():
     #state_transform = StateVel(exclude_obstacles=True)
     num_actions = 18
 
-    state_shape = (args.last_n_states, state_transform.state_size + num_actions)
+    state_shape = (5, state_transform.state_size + num_actions)
 
     # build model
     model_params = {
@@ -140,8 +135,8 @@ def main():
     for i in xrange(args.num_agents):
         w_queue = Queue()
         worker = Process(target=run_agent,
-                         args=(model_params, weights, state_transform, args.last_n_states,
-                               data_queue, w_queue, i, global_step, updates, best_reward,
+                         args=(model_params, weights, state_transform, data_queue,
+                               w_queue, i, global_step, updates, best_reward,
                                args.max_steps)
                          )
         worker.daemon = True

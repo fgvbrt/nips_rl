@@ -124,12 +124,14 @@ def build_model(state_shape, num_act, gamma=0.99,
 
     # get params
     params_actor = lasagne.layers.get_all_params(l_actor)
-    params_crit = [p for p in lasagne.layers.get_all_params(l_critic) if p not in params_actor] # critic doesn't update rnn
-    params = params_actor + params_crit
+    params_crit = lasagne.layers.get_all_params(l_critic)
+    #params_crit = [p for p in lasagne.layers.get_all_params(l_critic) if p not in params_actor] # critic doesn't update rnn
+    params = params_actor + [p for p in params_crit if p not in params_actor]
     # get target params
     params_actor_target = lasagne.layers.get_all_params(l_actor_target)
-    params_crit_target = [p for p in lasagne.layers.get_all_params(l_critic_target) if p not in params_actor_target]
-    params_target = params_actor_target + params_crit_target
+    params_crit_target = lasagne.layers.get_all_params(l_critic_target)
+    #params_crit_target = [p for p in lasagne.layers.get_all_params(l_critic_target) if p not in params_actor_target]
+    params_target = params_actor_target + [p for p in params_crit_target if p not in params_actor_target]
 
     # set critic target to critic params
     for param, param_target in zip(params, params_target):
