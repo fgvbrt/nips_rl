@@ -173,11 +173,16 @@ def main():
                 states, actions, rewards, terminals, next_states = batch
 
                 states_flip = state_transform.flip_states(states)
-                next_states_flip = state_transform.flip_states(next_states)
                 left = states_flip[..., -18:-9].copy()
                 right = states_flip[..., -9:].copy()
                 states_flip[..., -18:-9] = right
                 states_flip[..., -9:] = left
+
+                next_states_flip = state_transform.flip_states(next_states)
+                left = next_states_flip[..., -18:-9].copy()
+                right = next_states_flip[..., -9:].copy()
+                next_states_flip[..., -18:-9] = right
+                next_states_flip[..., -9:] = left
 
                 actions_flip = np.zeros_like(actions)
                 actions_flip[:, :num_actions//2] = actions[:, num_actions//2:]
