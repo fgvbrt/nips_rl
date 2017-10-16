@@ -81,7 +81,8 @@ def test_agent(testing, state_transform, last_n_states, num_test_episodes,
         format(float(mean_reward), float(std_reward), test_rewards)
 
     if mean_reward > best_reward.value or mean_reward > 30 * env.reward_mult:
-        best_reward.value = mean_reward
+        if mean_reward > best_reward.value:
+            best_reward.value = mean_reward
         fname = os.path.join(save_dir, 'weights_updates_{}_reward_{:.2f}.pkl'.
                              format(updates.value, mean_reward))
         actor.save(fname)
