@@ -90,7 +90,7 @@ class State(object):
         self.bodies_idxs = [self.state_names.index(n) for n in get_bodies_names()]
         if self.predict_bodies:
             # 2 last dimensions, first for emulator values, second for predicted
-            self.last_bodies = np.zeros(shape=(1000, len(self.bodies_idxs), 2))
+            self.last_bodies = np.zeros(shape=(1001, len(self.bodies_idxs), 2))
             self._x = np.arange(self.last_n_bodies).reshape(-1, 1)
             self._x_pred = np.asarray([[self.last_n_bodies]])
             self._reg = LinearRegression()
