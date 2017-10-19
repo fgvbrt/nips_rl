@@ -48,7 +48,7 @@ def get_names_obstacles():
 
 def calculate_velocity(cur, prev):
     if prev is None:
-        return np.zeros_like(cur, dtype=np.float32)
+        return np.zeros_like(cur)
     return 100.*(cur - prev)
 
 
@@ -159,7 +159,7 @@ class State(object):
             return np.append(obst_features, is_obst), 0.
         elif self.obstacles_mode == 'gird':
             mass_x = state[self.state_names.index('mass_x')]
-            obst_grid = np.zeros(self.obst_grid_points, dtype=np.float32)
+            obst_grid = np.zeros(self.obst_grid_points)
             for k, v in self.obstacles.iteritems():
                 obst_x, obst_y, obst_r = v
                 obst_h = obst_y + obst_r
@@ -197,7 +197,7 @@ class State(object):
             return np.asarray(obst_state), obst_reward
 
     def process(self, state):
-        state = np.asarray(state, dtype=np.float32)
+        state = np.asarray(state)
         state = state[self.state_idxs]
         if self.step == 0:
             state[-3:] = [100, 0, 0]
@@ -223,13 +223,13 @@ class State(object):
 
     def flip_state(self, state, copy=True):
         assert np.ndim(state) == 1
-        state = np.asarray(state, dtype=np.float32)
+        state = np.asarray(state)
         state = self.flip_states(state.reshape(1, -1), copy)
         return state.ravel()
 
     def flip_states(self, states, copy=True):
         assert np.ndim(states) == 2
-        states = np.asarray(states, dtype=np.float32)
+        states = np.asarray(states)
         if copy:
             states = states.copy()
         left = states[:, self.left_idxs]

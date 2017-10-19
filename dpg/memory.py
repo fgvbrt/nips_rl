@@ -12,9 +12,9 @@ class ReplayMemory(object):
         self.rng = np.random.RandomState(seed)
 
         # init buffers
-        self.states = np.zeros(shape=(max_steps, state_size), dtype='float32')
-        self.actions = np.zeros(shape=(max_steps, action_size), dtype='float32')
-        self.rewards = np.zeros(max_steps, dtype='float32')
+        self.states = np.zeros(shape=(max_steps, state_size))
+        self.actions = np.zeros(shape=(max_steps, action_size))
+        self.rewards = np.zeros(max_steps)
         self.terminals = np.zeros(max_steps, dtype='bool')
 
     def reset(self):
@@ -87,11 +87,11 @@ class ReplayMemory(object):
             next_states for batch_size randomly chosen state transitions.
         """
         # Allocate the response.
-        states = np.zeros((batch_size, self.state_size), dtype='float32')
-        actions = np.zeros((batch_size, self.action_size), dtype='float32')
-        rewards = np.zeros((batch_size, 1), dtype='float32')
+        states = np.zeros((batch_size, self.state_size))
+        actions = np.zeros((batch_size, self.action_size))
+        rewards = np.zeros((batch_size, 1))
         next_states = np.zeros_like(states)
-        terminals = np.zeros((batch_size, 1), dtype='bool')
+        terminals = np.zeros((batch_size, 1))
 
         # uniform sampling
         count = 0

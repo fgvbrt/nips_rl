@@ -47,7 +47,7 @@ def find_noise_delta(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
     sigma = sigma_max
     step = 0
     while step < max_steps:
-        weights = [w + np.random.normal(scale=sigma, size=np.shape(w)).astype('float32')
+        weights = [w + np.random.normal(scale=sigma, size=np.shape(w))
                    for w in orig_weights]
         actor.set_actor_weights(weights, True)
         new_act = actor.act_batch(states)
@@ -78,7 +78,7 @@ def get_noisy_weights(params, sigma):
         if p.name in ('gamma', 'beta'):
             weights.append(w)
         else:
-            weights.append(w + np.random.normal(scale=sigma, size=np.shape(w)).astype('float32'))
+            weights.append(w + np.random.normal(scale=sigma, size=np.shape(w)))
     return weights
 
 
@@ -114,8 +114,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         steps = 0
         
         while not terminal:
-            state = np.asarray(state, dtype='float32')
-
+            #state = np.asarray(state, dtype='float32')
             action = actor.act(state)
             if action_noise:
                 action += random_process.sample()
@@ -146,11 +145,11 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         rewards.append(0)
         terminals.append(terminal)
 
-        states_np = np.asarray(states).astype('float32')
+        states_np = np.asarray(states)
         data = (states_np,
-                np.asarray(actions).astype('float32'),
-                np.asarray(rewards).astype('float32'),
-                np.asarray(terminals).astype('float32'),
+                np.asarray(actions),
+                np.asarray(rewards),
+                np.asarray(terminals),
                 )
         # send data for training
         data_queue.put((process, data))
@@ -161,7 +160,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         action_noise = np.random.rand() < 0.7
         if not action_noise:
             sigma = find_noise_delta(actor, states_np, random_process.current_sigma)
-            weights = get_noisy_weights(actor.params_actor, sigma)
+            weights = get_noisy_weights(actor.params_actor, sigma/5)
             actor.set_actor_weights(weights)
 
         # clear buffers

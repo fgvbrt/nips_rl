@@ -1,6 +1,6 @@
 import os
 os.environ['OMP_NUM_THREADS'] = '1'
-os.environ['THEANO_FLAGS'] = 'device=cpu'
+os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float64'
 
 import argparse
 import numpy as np
@@ -37,6 +37,7 @@ def get_args():
     parser.add_argument('--layer_norm', action='store_true', help="Use layer normaliation.")
     parser.add_argument('--exp_name', type=str, default=datetime.now().strftime("%d.%m.%Y-%H:%M"),
                         help='Experiment name')
+    parser.add_argument('--weights', type=str, default=None, help='weights to load')
     return parser.parse_args()
 
 
@@ -56,7 +57,7 @@ def test_agent(testing, state_transform, num_test_episodes,
         state = env.reset(seed=seed, difficulty=2)
         test_reward = 0
         while True:
-            state = np.asarray(state, dtype='float32')
+            #state = np.asarray(state, dtype='float32')
             action = actor.act(state)
             state, reward, terminal, _ = env.step(action)
             test_reward += reward
@@ -105,6 +106,9 @@ def main():
         build_model(**model_params)
     actor = Agent(actor_fn, params_actor, params_crit)
 
+    if args.weights is not None:
+        actor.load(args.weights)
+
     actor_lr_step = (args.actor_lr - args.actor_lr_end) / args.max_steps
     critic_lr_step = (args.critic_lr - args.critic_lr_end) / args.max_steps
 
@@ -143,10 +147,10 @@ def main():
 
         # get all data
         try:
-            i, (states, actions, rewards, terminals) = data_queue.get_nowait()
+            i, batch = data_queue.get_nowait()
             weights_queues[i].put(weights)
             # add data to memory
-            memory.add_samples(states, actions, rewards, terminals)
+            memory.add_samples(*batch)
         except queue.Empty:
             pass
 
