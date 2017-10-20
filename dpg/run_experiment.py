@@ -57,7 +57,7 @@ def test_agent(testing, state_transform, num_test_episodes,
         state = env.reset(seed=seed, difficulty=2)
         test_reward = 0
         while True:
-            #state = np.asarray(state, dtype='float32')
+            state = np.asarray(state, dtype='float32')
             action = actor.act(state)
             state, reward, terminal, _ = env.step(action)
             test_reward += reward

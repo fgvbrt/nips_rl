@@ -114,7 +114,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         steps = 0
         
         while not terminal:
-            #state = np.asarray(state, dtype='float32')
+            state = np.asarray(state, dtype='float32')
             action = actor.act(state)
             if action_noise:
                 action += random_process.sample()
@@ -145,10 +145,10 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         rewards.append(0)
         terminals.append(terminal)
 
-        states_np = np.asarray(states)
+        states_np = np.asarray(states).astype(np.float32)
         data = (states_np,
-                np.asarray(actions),
-                np.asarray(rewards),
+                np.asarray(actions).astype(np.float32),
+                np.asarray(rewards).astype(np.float32),
                 np.asarray(terminals),
                 )
         weight_send = None
