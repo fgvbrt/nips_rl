@@ -143,11 +143,14 @@ def main():
     prev_steps = 0
     start_save = time()
     start_test = time()
+    weights_rew_to_check = []
     while global_step.value < args.max_steps:
 
         # get all data
         try:
-            i, batch = data_queue.get_nowait()
+            i, batch, weights_check, reward = data_queue.get_nowait()
+            if weights_check is not None:
+                weights_rew_to_check.append((weights_check, reward))
             weights_queues[i].put(weights)
             # add data to memory
             memory.add_samples(*batch)
@@ -197,10 +200,15 @@ def main():
             start_save = time()
 
         # start new test process
-        if (time() - start_test) / 60. > args.test_period_min and testing.value == 0:
+        weights_rew_to_check = [(w, r) for w, r in weights_rew_to_check if r > best_reward.value]
+        if ((time() - start_test) / 60. > args.test_period_min or len(weights_rew_to_check) > 0) and testing.value == 0:
+            if len(weights_rew_to_check) > 0:
+                _weights, _ = weights_rew_to_check.pop()
+            else:
+                _weights = weights
             worker = Process(target=test_agent,
                              args=(testing, state_transform, args.num_test_episodes,
-                                   model_params, weights, best_reward, updates, save_dir)
+                                   model_params, _weights, best_reward, updates, save_dir)
                              )
             worker.daemon = True
             worker.start()

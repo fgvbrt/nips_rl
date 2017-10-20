@@ -92,8 +92,8 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
 
     env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5)
     #random_process = RandomActivation(size=env.noutput)
-    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.2, size=env.noutput,
-                                              sigma_min=0.15, n_steps_annealing=1e5)
+    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.1, size=env.noutput,
+                                              sigma_min=0.05, n_steps_annealing=1e5)
     # prepare buffers for data
     states = []
     actions = []
@@ -151,16 +151,29 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
                 np.asarray(rewards),
                 np.asarray(terminals),
                 )
+        weight_send = None
+        if total_reward > best_reward.value:
+            weight_send = actor.get_actor_weights()
         # send data for training
-        data_queue.put((process, data))
+        data_queue.put((process, data, weight_send, total_reward))
 
         # receive weights and set params to weights
         weights = weights_queue.get()
+
+        report_str = 'Global step: {}, steps/sec: {:.2f}, updates: {}, episode len {}, ' \
+                     'reward: {:.2f}, original_reward {:.4f}; best reward: {:.2f} noise {}'. \
+            format(global_step.value, 1. * global_step.value / (time() - start), updates.value, steps,
+                   total_reward, total_reward_original, best_reward.value, 'actions' if action_noise else 'params')
+        print report_str
+
+        with open('report.log', 'a') as f:
+            f.write(report_str + '\n')
+
         actor.set_actor_weights(weights)
         action_noise = np.random.rand() < 0.7
         if not action_noise:
             sigma = find_noise_delta(actor, states_np, random_process.current_sigma)
-            weights = get_noisy_weights(actor.params_actor, sigma/5)
+            weights = get_noisy_weights(actor.params_actor, sigma)
             actor.set_actor_weights(weights)
 
         # clear buffers
@@ -168,12 +181,3 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         del actions[:]
         del rewards[:]
         del terminals[:]
-
-        report_str = 'Global step: {}, steps/sec: {:.2f}, updates: {}, episode len {}, ' \
-                     'reward: {:.2f}, original_reward {:.4f}; best reward: {:.2f}'. \
-            format(global_step.value, 1. * global_step.value / (time() - start), updates.value, steps,
-                   total_reward, total_reward_original, best_reward.value)
-        print report_str
-
-        with open('report.log', 'a') as f:
-            f.write(report_str + '\n')
