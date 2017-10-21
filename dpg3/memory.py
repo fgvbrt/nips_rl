@@ -91,7 +91,7 @@ class ReplayMemory(object):
         actions = np.zeros((batch_size, self.action_size), dtype=self.actions.dtype)
         rewards = np.zeros((batch_size, 1), dtype=self.rewards.dtype)
         next_states = np.zeros_like(states, dtype=self.states.dtype)
-        terminals = np.zeros((batch_size, 1))
+        terminals = np.zeros((batch_size, 1), dtype=self.terminals.dtype)
 
         # uniform sampling
         count = 0
