@@ -72,7 +72,7 @@ def test_agent(testing, state_transform, num_test_episodes,
     if mean_reward > best_reward.value or mean_reward > 30 * env.reward_mult:
         if mean_reward > best_reward.value:
             best_reward.value = mean_reward
-        fname = os.path.join(save_dir, 'weights_updates_{}_reward_{:.2f}.pkl'.
+        fname = os.path.join(save_dir, 'weights_updates_{}_reward_{:.2f}.h5'.
                              format(updates.value, mean_reward))
         actor.save(fname)
     testing.value = 0
@@ -196,7 +196,7 @@ def main():
 
         # check if need to save and test
         if (time() - start_save)/60. > args.save_period_min:
-            fname = os.path.join(save_dir, 'weights_updates_{}.pkl'.format(updates.value))
+            fname = os.path.join(save_dir, 'weights_updates_{}.h5'.format(updates.value))
             actor.save(fname)
             start_save = time()
 
