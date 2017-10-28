@@ -5,7 +5,8 @@ from random_process import OrnsteinUhlenbeckProcess, RandomActivation
 from time import time
 import cPickle
 from model import Agent, build_model
-from datetime import datetime
+from scipy.signal import sawtooth
+
 
 def elu(x):
     return np.where(x > 0, x, np.expm1(x))
@@ -38,18 +39,67 @@ class ActorNumpy(object):
         return sigmoid(x)
 
 
-def run_agent(model_params, weights, state_transform, data_queue, weights_queue, process, global_step, updates, best_test_reward,
-              testing_period, num_test_episodes, max_steps=10000000):
+def find_noise_delta(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
+    orig_weights = actor.get_actor_weights(True)
+    orig_act = actor.act_batch(states)
+
+    sigma_min = 0.
+    sigma_max = 100.
+    sigma = sigma_max
+    step = 0
+    while step < max_steps:
+        weights = [w + np.random.normal(scale=sigma, size=np.shape(w)).astype('float32')
+                   for w in orig_weights]
+        actor.set_actor_weights(weights, True)
+        new_act = actor.act_batch(states)
+        d = np.sqrt(np.mean(np.square(new_act - orig_act)))
+
+        dd = d - target_d
+        if np.abs(dd) < tol:
+            actor.set_actor_weights(orig_weights, True)
+            return sigma
+
+        # too big sigma
+        if dd > 0:
+            sigma_max = sigma
+        # too small sigma
+        else:
+            sigma_min = sigma
+        sigma = sigma_min + (sigma_max - sigma_min) / 2
+        step += 1
+
+    actor.set_actor_weights(orig_weights, True)
+    return sigma
+
+
+def get_noisy_weights(params, sigma):
+    weights = []
+    for p in params:
+        w = p.get_value()
+        weights.append(w + np.random.normal(scale=sigma, size=np.shape(p.get_value())).astype('float32'))
+    return weights
+
+
+def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
+              process, global_step, updates, best_reward, max_steps=10000000):
 
     train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
-        build_model(*model_params)
+        build_model(**model_params)
     actor = Agent(actor_fn, params_actor, params_crit)
     actor.set_actor_weights(weights)
 
+    total_steps = 0
+    noise_period = 100
+    max_sigma_cur = 0.2
+    max_sigma_end = 0.1
+    min_sigma = 0.15
+    sigma_steps_annealing = 1000000
+    sigma_step = (max_sigma_cur - max_sigma_end) / sigma_steps_annealing
+
     env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5)
-    #random_process = RandomActivation(size=env.noutput)
-    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.2, size=env.noutput,
-                                              sigma_min=0.15, n_steps_annealing=1e5)
+    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=max_sigma_cur, size=env.noutput,
+                                              sigma_min=max_sigma_end, n_steps_annealing=1e5)
+
     # prepare buffers for data
     states = []
     actions = []
@@ -58,8 +108,8 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
 
     total_episodes = 0
     start = time()
-    start_exp= datetime.now().strftime("%d.%m.%Y-%H:%M")
-    save_num = 0
+    action_noise = True
+
     while global_step.value < max_steps:
         seed = random.randrange(2**32-2)
         state = env.reset(seed=seed, difficulty=2)
@@ -71,16 +121,23 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         steps = 0
         
         while not terminal:
+
+            sigma = (sawtooth(1. * total_steps * 4 * np.pi / noise_period) + 1.) / 2 * max_sigma_cur
+            sigma = np.clip(sigma, min_sigma, max_sigma_cur)
+
             state = np.asarray(state, dtype='float32')
 
             action = actor.act(state)
-            action += random_process.sample()
+            if action_noise:
+                action += random_process.sample(sigma)
 
             next_state, reward, next_terminal, info = env.step(action)
             total_reward += reward
             total_reward_original += info['original_reward']
             steps += 1
+            total_steps += 1
             global_step.value += 1
+            max_sigma_cur = max(max_sigma_end, max_sigma_cur-sigma_step)
 
             # add data to buffers
             states.append(state)
@@ -101,7 +158,9 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         actions.append(np.zeros(env.noutput))
         rewards.append(0)
         terminals.append(terminal)
-        data = (np .asarray(states).astype('float32'),
+
+        states_np = np.asarray(states).astype('float32')
+        data = (states_np,
                 np.asarray(actions).astype('float32'),
                 np.asarray(rewards).astype('float32'),
                 np.asarray(terminals).astype('float32'),
@@ -109,49 +168,25 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         # send data for training
         data_queue.put((process, data))
 
+        # receive weights and set params to weights
+        weights = weights_queue.get()
+        actor.set_actor_weights(weights)
+        action_noise = np.random.rand() < 0.7
+        if not action_noise:
+            weights_sigma = find_noise_delta(actor, states_np, sigma)
+            weights = get_noisy_weights(actor.params_actor_for_noise, weights_sigma)
+            actor.set_actor_weights(weights, True)
+
         # clear buffers
         del states[:]
         del actions[:]
         del rewards[:]
         del terminals[:]
 
-        # receive weights and set params to weights
-        weights = weights_queue.get()
-        actor.set_actor_weights(weights)
-
-        if process == 0 and total_episodes % testing_period == 0:
-            test_rewards = []
-            for ep in range(num_test_episodes):
-                seed = random.randrange(2**32-2)
-                state = env.reset(seed=seed, difficulty=2) 
-                test_reward = 0
-                while True:
-                    state = np.asarray(state, dtype='float32')
-                    action = actor.act(state)
-                    state, reward, terminal, _ = env.step(action)
-                    test_reward += reward
-                    if terminal:
-                        break
-                test_rewards.append(test_reward)
-            mean_reward = np.mean(test_rewards)
-            print 'test reward mean: {}, std: {}, all: {} '.format(mean_reward, np.std(test_rewards), test_rewards)
-            if mean_reward > best_test_reward.value:
-                best_test_reward.value = mean_reward
-                fname = 'weights/best_weights_start_{}_reward_{}.pkl'.format(start_exp, int(mean_reward))
-                actor.save(fname)
-            elif mean_reward > 3000:
-                fname = 'weights/best_weights_start_{}_reward_{}.pkl'.format(start_exp, int(mean_reward))
-                actor.save(fname)
-        if process == 0 and total_episodes % 5 == 0:
-            save_num += 1
-            fname = 'weights/last_weights_start_{}_{}.pkl'.format(start_exp, save_num)
-            actor.save(fname)
-            save_num = save_num % 10
-
         report_str = 'Global step: {}, steps/sec: {:.2f}, updates: {}, episode len {}, ' \
                      'reward: {:.2f}, original_reward {:.4f}; best reward: {:.2f}'. \
             format(global_step.value, 1. * global_step.value / (time() - start), updates.value, steps,
-                   total_reward, total_reward_original, best_test_reward.value)
+                   total_reward, total_reward_original, best_reward.value)
         print report_str
 
         with open('report.log', 'a') as f:
