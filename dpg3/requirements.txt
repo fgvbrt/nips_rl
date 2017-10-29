@@ -1,0 +1,6 @@
+scikit-learn==0.19.0
+Theano==0.9.0
+h5py==2.7.1
+jupyter==1.0.0
+https://github.com/Lasagne/Lasagne/archive/master.zip
+git+https://github.com/stanfordnmbl/osim-rl.git

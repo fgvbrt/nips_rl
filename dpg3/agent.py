@@ -3,9 +3,9 @@ import numpy as np
 import random
 from random_process import OrnsteinUhlenbeckProcess, RandomActivation
 from time import time
-import cPickle
+import pickle
 from model import Agent, build_model
-from scipy.signal import sawtooth
+import config
 
 
 def elu(x):
@@ -26,12 +26,12 @@ class ActorNumpy(object):
 
     def save_weights(self, fname):
         with open(fname, 'wb') as f:
-            cPickle.dump(self.weights, f, -1)
+            pickle.dump(self.weights, f, -1)
 
     def act(self, s):
         x = s
         num_layers = len(self.weights)/ 2
-        for i in xrange(num_layers):
+        for i in range(num_layers):
             x = np.dot(x, self.weights[2*i]) + self.weights[2*i+1]
             if i != num_layers - 1:
                 x = self.activation(x)
@@ -39,7 +39,7 @@ class ActorNumpy(object):
         return sigmoid(x)
 
 
-def find_noise_delta(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
+def set_params_noise(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
     orig_weights = actor.get_actor_weights(True)
     orig_act = actor.act_batch(states)
 
@@ -48,7 +48,7 @@ def find_noise_delta(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
     sigma = sigma_max
     step = 0
     while step < max_steps:
-        weights = [w + np.random.normal(scale=sigma, size=np.shape(w))
+        weights = [w + np.random.normal(scale=sigma, size=np.shape(w)).astype('float32')
                    for w in orig_weights]
         actor.set_actor_weights(weights, True)
         new_act = actor.act_batch(states)
@@ -56,8 +56,7 @@ def find_noise_delta(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
 
         dd = d - target_d
         if np.abs(dd) < tol:
-            actor.set_actor_weights(orig_weights, True)
-            return sigma
+            break
 
         # too big sigma
         if dd > 0:
@@ -67,9 +66,6 @@ def find_noise_delta(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
             sigma_min = sigma
         sigma = sigma_min + (sigma_max - sigma_min) / 2
         step += 1
-
-    actor.set_actor_weights(orig_weights, True)
-    return sigma
 
 
 def get_noisy_weights(params, sigma):
@@ -91,24 +87,10 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     actor = Agent(actor_fn, params_actor, params_crit)
     actor.set_actor_weights(weights)
 
-    total_steps = 0
-    noise_period = 100
-    max_sigma_cur = 0.2
-    max_sigma_end = 0.1
-    min_sigma = 0.15
-    sigma_steps_annealing = 1000000
-    sigma_step = (max_sigma_cur - max_sigma_end) / sigma_steps_annealing
-
-    env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5)
-<<<<<<< HEAD
-    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=max_sigma_cur, size=env.noutput,
-                                              sigma_min=max_sigma_end, n_steps_annealing=1e5)
-
-=======
+    env = RunEnv2(state_transform, max_obstacles=config.num_obstacles, skip_frame=config.skip_frames)
     #random_process = RandomActivation(size=env.noutput)
-    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.1, size=env.noutput,
-                                              sigma_min=0.05, n_steps_annealing=1e5)
->>>>>>> py3
+    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.2, size=env.noutput,
+                                              sigma_min=0.05, n_steps_annealing=1e6)
     # prepare buffers for data
     states = []
     actions = []
@@ -118,7 +100,6 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     total_episodes = 0
     start = time()
     action_noise = True
-
     while global_step.value < max_steps:
         seed = random.randrange(2**32-2)
         state = env.reset(seed=seed, difficulty=2)
@@ -130,22 +111,16 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         steps = 0
         
         while not terminal:
-
-            sigma = (sawtooth(1. * total_steps * 4 * np.pi / noise_period) + 1.) / 2 * max_sigma_cur
-            sigma = np.clip(sigma, min_sigma, max_sigma_cur)
-
             state = np.asarray(state, dtype='float32')
             action = actor.act(state)
             if action_noise:
-                action += random_process.sample(sigma)
+                action += random_process.sample()
 
             next_state, reward, next_terminal, info = env.step(action)
             total_reward += reward
             total_reward_original += info['original_reward']
             steps += 1
-            total_steps += 1
             global_step.value += 1
-            max_sigma_cur = max(max_sigma_end, max_sigma_cur-sigma_step)
 
             # add data to buffers
             states.append(state)
@@ -186,7 +161,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
                      'reward: {:.2f}, original_reward {:.4f}; best reward: {:.2f} noise {}'. \
             format(global_step.value, 1. * global_step.value / (time() - start), updates.value, steps,
                    total_reward, total_reward_original, best_reward.value, 'actions' if action_noise else 'params')
-        print report_str
+        print(report_str)
 
         with open('report.log', 'a') as f:
             f.write(report_str + '\n')
@@ -194,12 +169,13 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         actor.set_actor_weights(weights)
         action_noise = np.random.rand() < 0.7
         if not action_noise:
-            weights_sigma = find_noise_delta(actor, states_np, sigma)
-            weights = get_noisy_weights(actor.params_actor_for_noise, weights_sigma)
-            actor.set_actor_weights(weights, True)
+            set_params_noise(actor, states_np, random_process.current_sigma)
 
         # clear buffers
         del states[:]
         del actions[:]
         del rewards[:]
         del terminals[:]
+
+        if total_episodes % 100 == 0:
+            env = RunEnv2(state_transform, max_obstacles=10, skip_frame=5)

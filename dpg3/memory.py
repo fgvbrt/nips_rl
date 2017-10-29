@@ -56,19 +56,19 @@ class ReplayMemory(object):
         """
         # easy part
         n = states.shape[0]
-        idxs = xrange(self.top, self.top + n)
+        idxs = range(self.top, self.top + n)
         self.terminals.put(idxs, terminals, mode='wrap')
         self.rewards.put(idxs, rewards, mode='wrap')
 
         # for states and action need to calculate idxs
         states_start_idx = self.top * self.state_size
         states_end_idx = states_start_idx + np.prod(states.shape)
-        states_idxs = xrange(states_start_idx, states_end_idx)
+        states_idxs = range(states_start_idx, states_end_idx)
         self.states.put(states_idxs, states, mode='wrap')
 
         act_start_idx = self.top * self.action_size
         act_end_idx = act_start_idx + np.prod(actions.shape)
-        act_idxs = xrange(act_start_idx, act_end_idx)
+        act_idxs = range(act_start_idx, act_end_idx)
         self.actions.put(act_idxs, actions, mode='wrap')
 
         if self.size == self.max_steps:
@@ -91,7 +91,7 @@ class ReplayMemory(object):
         actions = np.zeros((batch_size, self.action_size), dtype=self.actions.dtype)
         rewards = np.zeros((batch_size, 1), dtype=self.rewards.dtype)
         next_states = np.zeros_like(states, dtype=self.states.dtype)
-        terminals = np.zeros((batch_size, 1))
+        terminals = np.zeros((batch_size, 1), dtype=self.terminals.dtype)
 
         # uniform sampling
         count = 0
