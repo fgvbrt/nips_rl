@@ -200,6 +200,8 @@ class State(object):
     def process(self, state):
         state = np.asarray(state)
         state = state[self.state_idxs]
+        if self.step == 0:
+            state[-3:] = [100, 0, 0]
 
         self._add_obstacle(state)
         obst_state, obst_reward = self._get_obstacle_state_reward(state)

@@ -1,6 +1,9 @@
 import os
 import h5py
-import cPickle as pickle
+try:
+    import cPickle as pickle
+except:
+    import pickle
 import argparse
 
 

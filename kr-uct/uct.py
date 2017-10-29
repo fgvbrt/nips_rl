@@ -118,23 +118,23 @@ class Node(object):
         return node, leaf
 
 
-def uct_action(env, agent, node, sim_steps, search_horizont, gamma, c=1.):
+def uct_action(env, agent, node, sim_steps, search_horizont, act_rep, gamma, c=1.):
     
     # do simulations
     for _ in range(sim_steps):
-        sample(env, agent, node, search_horizont, gamma, c)
+        sample(env, agent, node, search_horizont, act_rep, gamma, c)
 
     # choose action
     return node.best_action()
 
 
-def sample(env, agent, node, search_horizont, gamma, c):
+def sample(env, agent, node, search_horizont, act_rep, gamma, c):
     
     depth = 0
     leaf = False
 
-    # while not leaf and depth < search_horizont:
-    while not leaf:
+    while not leaf and depth < search_horizont:
+    #while not leaf:
         node, leaf = node.selection(env, agent, c)
         depth += 1
 
@@ -143,26 +143,32 @@ def sample(env, agent, node, search_horizont, gamma, c):
             break
 
     R = node.value
-    if leaf and not node.terminal:
+    rollout_steps = search_horizont - depth
+    if leaf and not node.terminal and rollout_steps > 0:
         env.restore_state(node.osim_state)
         s = node.state
-        R = rollout(env, s, agent, search_horizont, gamma)
+        R = rollout(env, s, agent, rollout_steps, act_rep, gamma)
 
     # backup
     update_values(R, node, gamma)
 
 
-def rollout(env, s, agent, n_steps, gamma=0.99):
+def rollout(env, s, agent, n_steps, act_rep, gamma=1):
     R = 0.
     g = 1.
     step = 0
 
     while True:
         a = agent.act(s)
-        s, r, t, _, = env.step(a)
-        R += r*g
-        g *= gamma
-        step += 1
+
+        for _ in range(act_rep):
+            s, r, t, _, = env.step(a)
+            R += r * g
+            g *= gamma
+            step += 1
+            if t or 0 < n_steps <= step:
+                break
+
         if t or 0 < n_steps <= step:
             break
 

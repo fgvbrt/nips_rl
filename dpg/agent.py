@@ -100,15 +100,9 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     sigma_step = (max_sigma_cur - max_sigma_end) / sigma_steps_annealing
 
     env = RunEnv2(state_transform, max_obstacles=3, skip_frame=5)
-<<<<<<< HEAD
-    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=max_sigma_cur, size=env.noutput,
-                                              sigma_min=max_sigma_end, n_steps_annealing=1e5)
-
-=======
     #random_process = RandomActivation(size=env.noutput)
     random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.1, size=env.noutput,
                                               sigma_min=0.05, n_steps_annealing=1e5)
->>>>>>> py3
     # prepare buffers for data
     states = []
     actions = []

@@ -2,7 +2,6 @@ import theano
 import theano.tensor as T
 import lasagne
 from collections import OrderedDict
-import cPickle
 import numpy as np
 from lasagne.layers import Layer, DenseLayer, NonlinearityLayer
 from lasagne import init
@@ -34,7 +33,7 @@ class LayerNorm(Layer):
 
 
 def build_actor(l_input, num_act, last_nonlinearity=lasagne.nonlinearities.sigmoid,
-                hid_sizes=(64, 64, 32), layer_norm=True,
+                hid_sizes=(64, 64), layer_norm=True,
                 nonlinearity=lasagne.nonlinearities.elu):
     l_hid = l_input
     for hid_size in hid_sizes:
@@ -91,32 +90,15 @@ def build_model(state_size, num_act, gamma=0.99,
         build_actor_critic(state_size, num_act, layer_norm)
 
     # get current network output tensors
-    actions_pred1 = lasagne.layers.get_output(l_actor1, states)
-    q_vals1 = lasagne.layers.get_output(l_critic1, {l_states1: states, l_actions1: actions})
-    v_vals1 = lasagne.layers.get_output(l_critic1, {l_states1: states, l_actions1: actions_pred1})
-
-    actions_pred2 = lasagne.layers.get_output(l_actor2, states[:, :-3])
-    q_vals2 = lasagne.layers.get_output(l_critic2, {l_states2: states[:, :-3], l_actions2: actions})
-    v_vals2 = lasagne.layers.get_output(l_critic2, {l_states2: states[:, :-3], l_actions2: actions_pred2})
+    actions_pred = lasagne.layers.get_output(l_actor, states)
+    q_vals = lasagne.layers.get_output(l_critic, {l_states: states, l_actions: actions})
+    v_vals = lasagne.layers.get_output(l_critic, {l_states: states, l_actions: actions_pred})
 
     # get target network q-values
-    actions_pred_target1 = lasagne.layers.get_output(l_actor_target1, next_states)
-    v_vals_target1 = lasagne.layers.get_output(
-        l_critic_target1,
-        {l_states_target1: next_states, l_actions_target1: actions_pred_target1})
-
-    actions_pred_target2 = lasagne.layers.get_output(l_actor_target2, next_states[:, :-3])
-    v_vals_target2 = lasagne.layers.get_output(
-        l_critic_target2,
-        {l_states_target2: next_states[:, :-3], l_actions_target2: actions_pred_target2})
-
-    # below are theano tensors
-    m = T.eq(states[:, -3], -1).reshape((states.shape[0], 1))
-    actions_pred = (1-m)*actions_pred1 + m*actions_pred2
-    q_vals = (1-m)*q_vals1 + m*q_vals2
-    v_vals = (1-m)*v_vals1 + m*v_vals2
-
-    v_vals_target = (1-m)*v_vals_target1 + m*v_vals_target2
+    actions_pred_target = lasagne.layers.get_output(l_actor_target, next_states)
+    v_vals_target = lasagne.layers.get_output(
+        l_critic_target,
+        {l_states_target: next_states, l_actions_target: actions_pred_target})
 
     # target for q_vals
     target = gamma*v_vals_target*(1.-terminals) + rewards
@@ -135,14 +117,12 @@ def build_model(state_size, num_act, gamma=0.99,
     actor_loss = -1.*T.mean(v_vals)
 
     # get params
-    params_actor = lasagne.layers.get_all_params(l_actor1) + lasagne.layers.get_all_params(l_actor2)
-    params_crit = lasagne.layers.get_all_params(l_critic1) + lasagne.layers.get_all_params(l_critic2)
+    params_actor = lasagne.layers.get_all_params(l_actor)
+    params_crit = lasagne.layers.get_all_params(l_critic)
     params = params_actor + params_crit
     # get target params
-    params_target = lasagne.layers.get_all_params(l_actor_target1) + \
-                    lasagne.layers.get_all_params(l_actor_target2) + \
-                    lasagne.layers.get_all_params(l_critic_target1) + \
-                    lasagne.layers.get_all_params(l_critic_target2)
+    params_target = lasagne.layers.get_all_params(l_actor_target) + \
+                    lasagne.layers.get_all_params(l_critic_target)
 
     # set critic target to critic params
     for param, param_target in zip(params, params_target):
