@@ -2,7 +2,9 @@ import numpy as np
 
 
 class ReplayMemory(object):
-    def __init__(self, state_size, action_size, max_steps=100000, seed=None):
+    def __init__(self, state_size, action_size,
+                 max_steps=100000, seed=None,
+                 gamma=0.9, n_step=5):
         self.max_steps = max_steps
         self.state_size = state_size
         self.action_size = action_size
@@ -10,6 +12,8 @@ class ReplayMemory(object):
         self.top = 0
         self.size = 0
         self.rng = np.random.RandomState(seed)
+        self.rew_conv_win = np.asarray([gamma**i for i in range(n_step)])
+        self.crop_beg = n_step - 1
 
         # init buffers
         self.states = np.zeros(shape=(max_steps, state_size), dtype=np.float32)
@@ -54,6 +58,9 @@ class ReplayMemory(object):
             terminal -- boolean indicating whether the episode ended
             after this time step
         """
+        # make some preprocessing for rewards
+        rewards = np.correlate(rewards, self.rew_conv_win, mode='full')[self.crop_beg:]
+
         # easy part
         n = states.shape[0]
         idxs = range(self.top, self.top + n)

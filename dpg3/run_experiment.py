@@ -22,6 +22,7 @@ import config
 def get_args():
     parser = argparse.ArgumentParser(description="Run commands")
     parser.add_argument('--gamma', type=float, default=0.9, help="Discount factor for reward.")
+    parser.add_argument('--n_step', type=int, default=5, help="Discount factor for reward.")
     parser.add_argument('--num_agents', type=int, default=cpu_count()-1, help="Number of agents to run.")
     parser.add_argument('--sleep', type=int, default=0, help="Sleep time in seconds before start each worker.")
     parser.add_argument('--max_steps', type=int, default=10000000, help="Number of steps.")
@@ -66,8 +67,8 @@ def test_agent(testing, state_transform, num_test_episodes,
         test_rewards.append(test_reward)
     mean_reward = np.mean(test_rewards)
     std_reward = np.std(test_rewards)
-    print('test reward mean: {:.2f}, std: {:.2f}, all: {} '.\
-        format(float(mean_reward), float(std_reward), test_rewards))
+    print('test reward mean: {:.2f}, std: {:.2f}, all: {} '.
+          format(float(mean_reward), float(std_reward), test_rewards))
 
     if mean_reward > best_reward.value or mean_reward > 30 * env.reward_mult:
         if mean_reward > best_reward.value:
@@ -97,7 +98,7 @@ def main():
     model_params = {
         'state_size': state_transform.state_size,
         'num_act': num_actions,
-        'gamma': args.gamma,
+        'gamma': args.gamma**args.n_step,
         'actor_lr': args.actor_lr,
         'critic_lr': args.critic_lr,
         'layer_norm': args.layer_norm
