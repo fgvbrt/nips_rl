@@ -6,6 +6,7 @@ import cPickle
 import numpy as np
 from lasagne.layers import Layer, DenseLayer, NonlinearityLayer
 from lasagne import init
+from pkl2h5 import write_h5, read_h5
 
 
 class LayerNorm(Layer):
@@ -33,28 +34,28 @@ class LayerNorm(Layer):
 
 
 def build_actor(l_input, num_act, last_nonlinearity=lasagne.nonlinearities.sigmoid,
-                hid_sizes=(64, 64), layer_norm=True,
+                hid_sizes=(64, 64, 32), layer_norm=True,
                 nonlinearity=lasagne.nonlinearities.elu):
     l_hid = l_input
     for hid_size in hid_sizes:
-        l_hid = lasagne.layers.DenseLayer(l_hid, hid_size)
+        l_hid = DenseLayer(l_hid, hid_size)
         if layer_norm:
             l_hid = LayerNorm(l_hid)
         l_hid = NonlinearityLayer(l_hid, nonlinearity)
 
-    return lasagne.layers.DenseLayer(l_hid, num_act, nonlinearity=last_nonlinearity)
+    return DenseLayer(l_hid, num_act, nonlinearity=last_nonlinearity)
 
 
 def build_critic(l_input, hid_sizes=(64, 32), layer_norm=True,
-                 nonlinearity=lasagne.nonlinearities.elu):
+                 nonlinearity=lasagne.nonlinearities.tanh):
     l_hid = l_input
     for hid_size in hid_sizes:
-        l_hid = lasagne.layers.DenseLayer(l_hid, hid_size)
+        l_hid = DenseLayer(l_hid, hid_size)
         if layer_norm:
             l_hid = LayerNorm(l_hid)
         l_hid = NonlinearityLayer(l_hid, nonlinearity)
 
-    return lasagne.layers.DenseLayer(l_hid, 1, nonlinearity=None)
+    return DenseLayer(l_hid, 1, nonlinearity=None)
 
 
 def build_actor_critic(state_size, num_act, layer_norm):
@@ -215,16 +216,14 @@ class Agent(object):
         self.set_crit_weights(crit_weights)
 
     def save(self, fname):
-        with open(fname, 'wb') as f:
-            actor_weigths = self.get_actor_weights()
-            crit_weigths = self.get_critic_weights()
-            cPickle.dump([actor_weigths, crit_weigths], f, -1)
+        actor_weigths = self.get_actor_weights()
+        crit_weigths = self.get_critic_weights()
+        write_h5(fname, (actor_weigths, crit_weigths))
 
     def load(self, fname):
-        with open(fname, 'rb') as f:
-            actor_weights, critic_wieghts = cPickle.load(f)
-            self.set_actor_weights(actor_weights)
-            self.set_crit_weights(critic_wieghts)
+        actor_weights, critic_wieghts = read_h5(fname)
+        self.set_actor_weights(actor_weights)
+        self.set_crit_weights(critic_wieghts)
 
     def act(self, state):
         state = np.asarray([state])
