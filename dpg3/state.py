@@ -251,7 +251,8 @@ class State(object):
 
 class StateVel(State):
     def __init__(self, vel_states=get_bodies_names(), obstacles_mode='bodies_dist', last_n_bodies=0):
-        super(StateVel, self).__init__(obstacles_mode=obstacles_mode, last_n_bodies=last_n_bodies)
+        super(StateVel, self).__init__(obstacles_mode=obstacles_mode,
+                                       last_n_bodies=last_n_bodies)
         self.vel_idxs = [self.state_names.index(k) for k in vel_states]
         self.prev_vals = None
         self.state_names += [n + '_vel' for n in vel_states]
@@ -276,8 +277,10 @@ class StateVelCentr(State):
     def __init__(self, centr_state='pelvis_x', vel_states=get_bodies_names(),
                  states_to_center=get_names_to_center('pelvis'),
                  vel_before_centr=True, obstacles_mode='bodies_dist',
-                 exclude_centr=False, last_n_bodies=0):
-        super(StateVelCentr, self).__init__(obstacles_mode=obstacles_mode, last_n_bodies=last_n_bodies)
+                 exclude_centr=False, last_n_bodies=0, add_step=True):
+        super(StateVelCentr, self).__init__(obstacles_mode=obstacles_mode,
+                                            last_n_bodies=last_n_bodies,
+                                            add_step=add_step)
 
         # center
         self.centr_idx = self.state_names.index(centr_state)
