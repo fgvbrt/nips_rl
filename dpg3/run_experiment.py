@@ -1,6 +1,6 @@
 import os
 os.environ['OMP_NUM_THREADS'] = '1'
-os.environ['THEANO_FLAGS'] = 'device=cpu'
+os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float64'
 
 import argparse
 import numpy as np
@@ -44,7 +44,7 @@ def get_args():
 
 def test_agent(testing, state_transform, num_test_episodes,
                model_params, weights, best_reward, updates, save_dir):
-    env = RunEnv2(state_transform, max_obstacles=config.num_obstacles, skip_frame=config.skip_frames)
+    env = RunEnv2(state_transform, max_obstacles=config.num_obstacles, skip_frame=1)
     test_rewards = []
 
     train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
@@ -161,7 +161,7 @@ def main():
         # training step
         # TODO: consider not training during testing model
         if len(memory) > args.start_train_steps:
-            batch = memory.random_batch(args.batch_size)
+            batch = memory.random_batch2(args.batch_size)
 
             if np.random.rand() < args.flip_prob:
                 states, actions, rewards, terminals, next_states = batch

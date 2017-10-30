@@ -5,13 +5,14 @@ from gym.spaces import Box, MultiBinary
 
 class RunEnv2(RunEnv):
     def __init__(self, state_transform, visualize=False, max_obstacles=3,
-                 skip_frame=5, reward_mult=10.):
+                 skip_frame=5, reward_mult=10., fall_penalty=-1):
         super(RunEnv2, self).__init__(visualize, max_obstacles)
         self.state_transform = state_transform
         self.observation_space = Box(-1000, 1000, state_transform.state_size)
         self.action_space = MultiBinary(18)
         self.skip_frame = skip_frame
         self.reward_mult = reward_mult
+        self.fall_penalty = fall_penalty
 
     def reset(self, difficulty=2, seed=None):
         s = super(RunEnv2, self).reset(difficulty=difficulty, seed=seed)
@@ -21,7 +22,7 @@ class RunEnv2(RunEnv):
 
     def _step(self, action):
         action = np.clip(action, 0, 1)
-        info = {'original_reward':0}
+        info = {'original_reward': 0}
         reward = 0.
         for _ in range(self.skip_frame):
             s, r, t, _ = super(RunEnv2, self)._step(action)
@@ -29,7 +30,10 @@ class RunEnv2(RunEnv):
             s, obst_rew = self.state_transform.process(s)
             reward += r + obst_rew
             if t:
-                break            
+                break
+
+        if self.is_pelvis_too_low():
+            reward += self.fall_penalty
 
         return s, reward*self.reward_mult, t, info
 

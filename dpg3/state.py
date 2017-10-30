@@ -59,12 +59,14 @@ def _get_pattern_idxs(lst, pattern):
 
 
 class State(object):
-    def __init__(self, obstacles_mode='bodies_dist', obst_grid_dist=1, grid_points=100, last_n_bodies=0):
+    def __init__(self, obstacles_mode='bodies_dist', obst_grid_dist=1,
+                 grid_points=100, last_n_bodies=0, add_step=True):
         assert obstacles_mode in ['exclude', 'grid', 'bodies_dist', 'standard']
 
         self.state_idxs = [i for i, n in enumerate(get_state_names(True, True)) if n not in ['pelvis2_x', 'pelvis2_y']]
         self.state_names = get_state_names()
         self.step = 0
+        self.add_step = add_step
         self.obstacles_mode = obstacles_mode
         self.obstacles = OrderedDict()
 
@@ -76,7 +78,6 @@ class State(object):
             self.obst_grid_dist = obst_grid_dist
             self.obst_grid_points = grid_points
             self.obst_grid_size = obst_grid_dist * 2 / grid_points
-            self.state_names = self.state_names[:-3]
         elif obstacles_mode == 'bodies_dist':
             self._obst_names = get_names_obstacles()
             for i in range(3):
@@ -85,6 +86,9 @@ class State(object):
                     self.obst_names.append('{}_{}_obst_x_end'.format(n, i))
                     self.obst_names.append('{}_{}_obst_y'.format(n, i))
         self.obst_names.append('is_obstacle')
+
+        if self.add_step:
+            self.state_names.append('step')
 
         self.predict_bodies = last_n_bodies > 0
         self.last_n_bodies = last_n_bodies
@@ -200,12 +204,13 @@ class State(object):
     def process(self, state):
         state = np.asarray(state)
         state = state[self.state_idxs]
-        if self.step == 0:
-            state[-3:] = [100, 0, 0]
 
         self._add_obstacle(state)
         obst_state, obst_reward = self._get_obstacle_state_reward(state)
         state = state[:-3]
+
+        if self.add_step:
+            state = np.append(state, 1. * self.step / 1000)
 
         # update last bodies
         #state_no_pred = state.copy()
