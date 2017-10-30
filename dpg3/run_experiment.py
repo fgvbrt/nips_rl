@@ -161,7 +161,7 @@ def main():
         # training step
         # TODO: consider not training during testing model
         if len(memory) > args.start_train_steps:
-            batch = memory.random_batch(args.batch_size)
+            batch = memory.random_batch2(args.batch_size)
 
             if np.random.rand() < args.flip_prob:
                 states, actions, rewards, terminals, next_states = batch

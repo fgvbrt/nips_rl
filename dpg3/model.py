@@ -2,11 +2,16 @@ import theano
 import theano.tensor as T
 import lasagne
 from collections import OrderedDict
-import pickle
 import numpy as np
 from lasagne.layers import Layer, DenseLayer, NonlinearityLayer, InputLayer, ConcatLayer
 from lasagne import init
 from pkl2h5 import write_h5, read_h5
+
+
+ACTIVATIONS = {
+    'elu': lasagne.nonlinearities.elu,
+    'tanh': lasagne.nonlinearities.tanh
+}
 
 
 class LayerNorm(Layer):
@@ -33,9 +38,14 @@ class LayerNorm(Layer):
         return (input - input_mean) * input_inv_std * self.gamma + self.beta
 
 
-def build_actor(l_input, num_act, last_nonlinearity=lasagne.nonlinearities.sigmoid,
-                hid_sizes=(64, 64, 32), layer_norm=True,
-                nonlinearity=lasagne.nonlinearities.elu):
+def build_actor(l_input, num_act,
+                hid_sizes=(64, 64, 32),
+                layer_norm=True,
+                nonlinearity='elu',
+                last_nonlinearity=lasagne.nonlinearities.sigmoid,
+                ):
+    nonlinearity = ACTIVATIONS[nonlinearity]
+
     l_hid = l_input
     for hid_size in hid_sizes:
         l_hid = DenseLayer(l_hid, hid_size)
@@ -47,7 +57,9 @@ def build_actor(l_input, num_act, last_nonlinearity=lasagne.nonlinearities.sigmo
 
 
 def build_critic(l_input, hid_sizes=(64, 32), layer_norm=True,
-                 nonlinearity=lasagne.nonlinearities.tanh):
+                 nonlinearity='tanh'):
+    nonlinearity = ACTIVATIONS[nonlinearity]
+
     l_hid = l_input
     for hid_size in hid_sizes:
         l_hid = DenseLayer(l_hid, hid_size)
@@ -58,15 +70,15 @@ def build_critic(l_input, hid_sizes=(64, 32), layer_norm=True,
     return DenseLayer(l_hid, 1, nonlinearity=None)
 
 
-def build_actor_critic(state_size, num_act, layer_norm):
+def build_actor_critic(state_size, num_act, hid_actor, hid_critic, layer_norm):
     # input layers
     l_states = InputLayer([None, state_size])
     l_actions = InputLayer([None, num_act])
     l_input_critic = ConcatLayer([l_states, l_actions])
     # actor layer
-    l_actor = build_actor(l_states, num_act, layer_norm=layer_norm)
+    l_actor = build_actor(l_states, num_act, hid_actor, layer_norm=layer_norm)
     # critic layer
-    l_critic = build_critic(l_input_critic, layer_norm=layer_norm)
+    l_critic = build_critic(l_input_critic, hid_critic, layer_norm=layer_norm)
     return l_states, l_actions, l_actor, l_critic
 
 
@@ -74,6 +86,8 @@ def build_model(state_size, num_act, gamma=0.99,
                 actor_lr=0.00025,
                 critic_lr=0.0005,
                 target_update_coeff=1e-4,
+                hid_actor=(64, 64, 32),
+                hid_critic=(64, 32),
                 clip_delta=10.,
                 layer_norm=True):
 
@@ -85,10 +99,11 @@ def build_model(state_size, num_act, gamma=0.99,
     terminals = T.col('terminals')
 
     # current network
-    l_states, l_actions, l_actor, l_critic = build_actor_critic(state_size, num_act, layer_norm)
+    l_states, l_actions, l_actor, l_critic = build_actor_critic(
+        state_size, num_act, hid_actor, hid_critic, layer_norm)
     # target network
     l_states_target, l_actions_target, l_actor_target, l_critic_target =\
-        build_actor_critic(state_size, num_act, layer_norm)
+        build_actor_critic(state_size, num_act, hid_actor, hid_critic, layer_norm)
 
     # get current network output tensors
     actions_pred = lasagne.layers.get_output(l_actor, states)

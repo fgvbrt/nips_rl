@@ -88,9 +88,10 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     actor.set_actor_weights(weights)
 
     env = RunEnv2(state_transform, max_obstacles=config.num_obstacles, skip_frame=config.skip_frames)
-    #random_process = RandomActivation(size=env.noutput)
-    random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.2, size=env.noutput,
-                                              sigma_min=0.05, n_steps_annealing=1e6)
+    random_process = RandomActivation(size=env.noutput)
+    #random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.2, size=env.noutput,
+    #                                          sigma_min=0.05, n_steps_annealing=1e6)
+
     # prepare buffers for data
     states = []
     actions = []
@@ -169,7 +170,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         actor.set_actor_weights(weights)
         action_noise = np.random.rand() < 0.7
         if not action_noise:
-            set_params_noise(actor, states_np, random_process.current_sigma)
+            set_params_noise(actor, states_np, random_process.sigma*5)
 
         # clear buffers
         del states[:]

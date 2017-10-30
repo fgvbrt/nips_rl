@@ -4,8 +4,8 @@ from math import sqrt, log
 from sklearn.metrics.pairwise import rbf_kernel
 from collections import OrderedDict
 
-MIN_NODE_ACTIONS = 10
-GOOD_ACTIONS = 5
+MIN_NODE_ACTIONS = 20
+GOOD_ACTIONS = 10
 SIGMA1 = 0.1
 SIGMA2 = 0.2
 RBF_GAMMA = 10
