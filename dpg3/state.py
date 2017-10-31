@@ -60,7 +60,7 @@ def _get_pattern_idxs(lst, pattern):
 
 class State(object):
     def __init__(self, obstacles_mode='bodies_dist', obst_grid_dist=1,
-                 grid_points=100, last_n_bodies=0, add_step=True):
+                 grid_points=100, predict_bodies=False, add_step=True):
         assert obstacles_mode in ['exclude', 'grid', 'bodies_dist', 'standard']
 
         self.state_idxs = [i for i, n in enumerate(get_state_names(True, True)) if n not in ['pelvis2_x', 'pelvis2_y']]
@@ -90,17 +90,12 @@ class State(object):
         if self.add_step:
             self.state_names.append('step')
 
-        self.predict_bodies = last_n_bodies > 0
-        self.last_n_bodies = last_n_bodies
-        self.bodies_idxs = [self.state_names.index(n) for n in get_bodies_names()]
-        if self.predict_bodies:
-            # 2 last dimensions, first for emulator values, second for predicted
-            self.last_bodies = np.zeros(shape=(1001, len(self.bodies_idxs), 2))
-            self._x = np.arange(self.last_n_bodies).reshape(-1, 1)
-            self._x_pred = np.asarray([[self.last_n_bodies]])
-            self._reg = LinearRegression()
-            self.bodies_flt = np.zeros(len(self.state_names), dtype='bool')
-            self.bodies_flt[self.bodies_idxs] = 1
+        self.predict_bodies = predict_bodies
+        self.bodies_idxs_x = [self.state_names.index(n) for n in get_bodies_names() if n.endswith('_x')]
+        self.bodies_idxs_y = [self.state_names.index(n) for n in get_bodies_names() if n.endswith('_y')]
+        self.bodies_idxs = self.bodies_idxs_x + self.bodies_idxs_y
+        self.mass_x_idx = self.state_names.index('mass_x')
+        self.mass_y_idx = self.state_names.index('mass_y')
 
         self.state_names_out = self.state_names
         self._set_left_right()
@@ -111,34 +106,40 @@ class State(object):
 
     def reset(self):
         self.step = 0
+        self.prev_orig = None
+        self.prev_pred = None
         self.obstacles = OrderedDict()
 
     def _predict_bodies(self, state):
-        #print 'state before', state
-        self._update_bodies(state, 0)
+        state = np.copy(state)
 
-        # if enough steps check if prediction is needed
-        if self.step >= self.last_n_bodies:
-            bodies_predict_flt = self.last_bodies[self.step, :, 0] == self.last_bodies[self.step-1, :, 0]
+        if self.step > 0:
 
-            if np.any(bodies_predict_flt):
-                _state_bodies = state[self.bodies_flt]
-                #print '\npredicting', self.step
-                #print 'current vals', _state_bodies[bodies_predict_flt]
-                y = self.last_bodies[self.step - self.last_n_bodies:self.step, bodies_predict_flt, 1]
-                #_y = self.last_bodies[self.step - self.last_n_bodies:self.step, bodies_predict_flt, 0]
-                #print 'last_vals', _y
-                self._reg.fit(self._x, y)
-                y_pred = self._reg.predict(self._x_pred)[0]
-                #print 'predicted vals', y_pred
+            def update_bodies(cur, prev_orig, prev_pred, d):
+                flt = cur == prev_orig
+                cur[flt] = prev_pred[flt] + d
 
-                _state_bodies[bodies_predict_flt] = y_pred
-                state[self.bodies_flt] = _state_bodies
-                #print 'state after', state[self.bodies_idxs]
+            # does not matter orig or pred
+            dx = state[self.mass_x_idx] - self.prev_orig[self.mass_x_idx]
+            dy = state[self.mass_y_idx] - self.prev_orig[self.mass_y_idx]
 
-    def _update_bodies(self, state, axis):
-        if self.predict_bodies and self.step < 1000:
-            self.last_bodies[self.step, :, axis] = state[self.bodies_idxs]
+            cur_bodies_x = state[self.bodies_idxs_x]
+            cur_bodies_y = state[self.bodies_idxs_y]
+
+            # need for filter
+            prev_orig_bodies_x = self.prev_orig[self.bodies_idxs_x]
+            prev_orig_bodies_y = self.prev_orig[self.bodies_idxs_y]
+
+            # need for updating
+            prev_pred_bodies_x = self.prev_pred[self.bodies_idxs_x]
+            prev_pred_bodies_y = self.prev_pred[self.bodies_idxs_y]
+
+            update_bodies(cur_bodies_x, prev_orig_bodies_x, prev_pred_bodies_x, dx)
+            update_bodies(cur_bodies_y, prev_orig_bodies_y, prev_pred_bodies_y, dy)
+
+            state[self.bodies_idxs_x] = cur_bodies_x
+            state[self.bodies_idxs_y] = cur_bodies_y
+        return state
 
     def _add_obstacle(self, state):
         pelvis_x = state[1]
@@ -195,8 +196,8 @@ class State(object):
                         obst_state.append(obst_x_start - body_x)
                         obst_state.append(obst_x_end - body_x)
                         obst_state.append(body_y - obst_h)
-                        if obst_reward>=0 and body_x >= (obst_x_start - obst_r/2) \
-                                and (body_x<=obst_x_end+obst_r/2) and (obst_h +obst_r/2) >= body_y:
+                        if obst_reward >= 0 and body_x >= (obst_x_start - obst_r/2) \
+                                and (body_x <= obst_x_end+obst_r/2) and (obst_h + obst_r/2) >= body_y:
                             obst_reward = -0.5
             obst_state.append(is_obst)
             return np.asarray(obst_state), obst_reward
@@ -207,25 +208,19 @@ class State(object):
 
         self._add_obstacle(state)
         obst_state, obst_reward = self._get_obstacle_state_reward(state)
-        state = state[:-3]
+        state_orig = state[:-3]
 
         if self.add_step:
-            state = np.append(state, 1. * self.step / 1000)
+            state_orig = np.append(state_orig, 1. * self.step / 1000)
 
-        # update last bodies
-        #state_no_pred = state.copy()
         if self.predict_bodies:
-            self._predict_bodies(state)
-            #state_out = (state_no_pred + state)/2
-            #state_out = state
-            self._update_bodies(state, 1)
-        #else:
-        #    state_out = state_no_pred
+            state = self._predict_bodies(state_orig)
 
         self.step += 1
-        #return (state_no_pred + state)/2.
+        self.prev_orig = state_orig
+        self.prev_pred = np.copy(state)
+
         return (state, obst_state), obst_reward
-        #return np.concatenate(state, obst_state), obst_reward
 
     def flip_state(self, state, copy=True):
         assert np.ndim(state) == 1
@@ -250,9 +245,11 @@ class State(object):
 
 
 class StateVel(State):
-    def __init__(self, vel_states=get_bodies_names(), obstacles_mode='bodies_dist', last_n_bodies=0):
+    def __init__(self, vel_states=get_bodies_names(), obstacles_mode='bodies_dist',
+                 add_step=True, predict_bodies=False):
         super(StateVel, self).__init__(obstacles_mode=obstacles_mode,
-                                       last_n_bodies=last_n_bodies)
+                                       predict_bodies=predict_bodies,
+                                       add_step=add_step)
         self.vel_idxs = [self.state_names.index(k) for k in vel_states]
         self.prev_vals = None
         self.state_names += [n + '_vel' for n in vel_states]
@@ -277,9 +274,9 @@ class StateVelCentr(State):
     def __init__(self, centr_state='pelvis_x', vel_states=get_bodies_names(),
                  states_to_center=get_names_to_center('pelvis'),
                  vel_before_centr=True, obstacles_mode='bodies_dist',
-                 exclude_centr=False, last_n_bodies=0, add_step=True):
+                 exclude_centr=False, predict_bodies=False, add_step=True):
         super(StateVelCentr, self).__init__(obstacles_mode=obstacles_mode,
-                                            last_n_bodies=last_n_bodies,
+                                            predict_bodies=predict_bodies,
                                             add_step=add_step)
 
         # center

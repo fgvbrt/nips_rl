@@ -86,11 +86,8 @@ def main():
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    #state_transform = StateVelCentr(exclude_obstacles=True)
     state_transform = StateVelCentr(obstacles_mode='standard',
-                                    exclude_centr=True,
-                                    vel_states=[])
-    #state_transform = StateVel(exclude_obstacles=True)
+                                    exclude_centr=True)
     num_actions = 18
 
     # build model
