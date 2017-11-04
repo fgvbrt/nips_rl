@@ -1,6 +1,5 @@
 from __future__ import division
 import numpy as np
-from sklearn.linear_model import LinearRegression
 from collections import OrderedDict
 
 
