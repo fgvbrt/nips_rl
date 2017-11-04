@@ -6,6 +6,7 @@ import pickle
 import numpy as np
 from lasagne.layers import Layer, DenseLayer, NonlinearityLayer, InputLayer, ConcatLayer
 from lasagne import init
+from pkl2h5 import write_h5, read_h5
 
 
 class LayerNorm(Layer):
@@ -196,16 +197,11 @@ class Agent(object):
         self.set_crit_weights(crit_weights)
 
     def save(self, fname):
-        with open(fname, 'wb') as f:
-            actor_weigths = self.get_actor_weights()
-            crit_weigths = self.get_critic_weights()
-            pickle.dump([actor_weigths, crit_weigths], f, -1)
+        write_h5(fname, self.get_weights())
 
     def load(self, fname):
-        with open(fname, 'rb') as f:
-            actor_weights, critic_wieghts = pickle.load(f)
-            self.set_actor_weights(actor_weights)
-            self.set_crit_weights(critic_wieghts)
+        weights = read_h5(fname)
+        self.set_weights(*weights)
 
     def act(self, state):
         state = np.asarray([state])
