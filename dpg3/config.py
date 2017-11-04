@@ -1,2 +1,2 @@
-skip_frames = 1
+skip_frames = 2
 num_obstacles = 10

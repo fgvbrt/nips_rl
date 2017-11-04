@@ -9,8 +9,8 @@ from time import sleep
 from multiprocessing import Process, cpu_count, Value, Queue
 import queue
 from memory import ReplayMemory
-from agent import run_agent, elu, sigmoid
-from state import StateVelCentr, StateVel
+from agent import run_agent
+from state import StateVelCentr
 import lasagne
 import random
 from environments import RunEnv2
@@ -88,7 +88,7 @@ def main():
 
     state_transform = StateVelCentr(obstacles_mode='standard',
                                     exclude_centr=True,
-                                    vel_states=[])
+                                    )
     num_actions = 18
 
     # build model
