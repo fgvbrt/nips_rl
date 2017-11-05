@@ -13,47 +13,15 @@ import lasagne
 from datetime import datetime
 from time import time
 import Pyro4
+import yaml
 
 
 def get_args():
     parser = argparse.ArgumentParser(description="Run commands")
-    parser.add_argument('--gamma', type=float, default=0.9, help="Discount factor for reward.")
-    parser.add_argument('--max_steps', type=int, default=10000000, help="Number of steps.")
-    parser.add_argument('--test_period_min', default=30, type=int, help="Test interval int min.")
-    parser.add_argument('--save_period_min', default=30, type=int, help="Save interval int min.")
-    parser.add_argument('--num_test_episodes', type=int, default=5, help="Number of test episodes.")
-    parser.add_argument('--batch_size', type=int, default=1000, help="Batch size.")
-    parser.add_argument('--start_train_steps', type=int, default=10000, help="Number of steps tp start training.")
-    parser.add_argument('--critic_lr', type=float, default=2e-3, help="critic learning rate")
-    parser.add_argument('--actor_lr', type=float, default=1e-3, help="actor learning rate.")
-    parser.add_argument('--critic_lr_end', type=float, default=5e-5, help="critic learning rate")
-    parser.add_argument('--actor_lr_end', type=float, default=5e-5, help="actor learning rate.")
-    parser.add_argument('--flip_prob', type=float, default=1., help="Probability of flipping.")
-    parser.add_argument('--layer_norm', action='store_true', help="Use layer normaliation.")
     parser.add_argument('--exp_name', type=str, default=datetime.now().strftime("%d.%m.%Y-%H:%M"),
                         help='Experiment name')
     parser.add_argument('--weights', type=str, default=None, help='weights to load')
     return parser.parse_args()
-
-
-def init_model(args, state_transform):
-    # build model
-    model_params = {
-        'state_size': state_transform.state_size,
-        'num_act': 18,
-        'gamma': args.gamma,
-        'actor_lr': args.actor_lr,
-        'critic_lr': args.critic_lr,
-        'layer_norm': args.layer_norm
-    }
-    train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
-        build_model(**model_params)
-    actor = Agent(actor_fn, params_actor, params_crit)
-
-    if args.weights is not None:
-        actor.load(args.weights)
-
-    return actor, train_fn
 
 
 def find_samplers():
@@ -67,8 +35,18 @@ def find_samplers():
     return samplers
 
 
-def init_samplers(samplers):
-    pass
+def init_samplers(samplers, config, weights):
+    futures = []
+    print('start samplers initialization')
+    for sampler in samplers:
+        fut = Pyro4.Future(sampler.initialize(config, weights))
+        futures.append(fut)
+
+    while len(futures) > 0:
+        for fut in futures:
+            if fut.ready:
+                futures.remove(fut)
+    print('finish samplers initialization')
 
 
 def main():
@@ -79,22 +57,33 @@ def main():
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
+    # read config
+    with open('config.yaml') as f:
+        config = yaml.load(f)
+
     # init state transform
-    state_transform = StateVelCentr(obstacles_mode='standard',
-                                    exclude_centr=True)
+    state_transform = StateVelCentr(config['env_params']['state_transform'])
+
     # init model
-    actor, train_fn = init_model(args, state_transform)
+    config['model_params']['state_size'] = state_transform.state_size
+    train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
+        build_model(**config['model_params'])
+    actor = Agent(actor_fn, params_actor, params_crit)
+    if args.weights is not None:
+        actor.load(args.weights)
+    weights = [w.tolist() for w in actor.get_actor_weights()]
+
+    # initialize samplers
+    samplers = find_samplers()
+    init_samplers(samplers, config, weights)
 
     # init replay memory
-    memory = ReplayMemory(state_transform.state_size, 18, 5000000)
+    memory = ReplayMemory(state_transform.state_size, 18, **config['repay_memory'])
 
-    # find samplers
-    samplers = find_samplers()
-
-
-
+    # learning rate decay step
     actor_lr_step = (args.actor_lr - args.actor_lr_end) / args.max_steps
     critic_lr_step = (args.critic_lr - args.critic_lr_end) / args.max_steps
+    
 
     #
     #

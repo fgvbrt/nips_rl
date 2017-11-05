@@ -72,6 +72,12 @@ class Sampler(object):
         self.env_params = params
         self.env = RunEnv2(**params)
 
+    def initialize(self, config, weights):
+        self.create_actor(config['model_params'])
+        self.create_env(config['env_params'])
+        self.rand_process(config['rand_process'])
+        self.set_actor_weights(weights)
+
     @property
     def initialized(self):
         return self.actor is not None and self.rand_process is not None and self.env is not None

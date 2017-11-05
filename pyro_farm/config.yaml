@@ -1,0 +1,44 @@
+model_params:
+  gamma: 0.9
+  layer_norm: True
+  critic_lr: 2e-3
+  actor_lr: 1e-3
+  num_act: 18
+
+train_params:
+  critic_lr_end: 5e-5
+  actor_lr_end: 5e-5
+  flip_prob: 1
+  start_train_steps: 10000
+  batch_size: 1000
+  max_steps: 10000000
+
+test_params:
+  test_period_min: 30
+  save_period_min: 30
+  num_test_episodes: 5
+
+env_params:
+  env:
+    skip_frame: 3
+    reward_mult: 10
+    fall_penalty: -0.1
+  state_transform:
+    centr_state: 'pelvis_x'
+    vel_states: []
+    obstacles_mode: 'standard'
+    exclude_centr: True
+    predict_bodies: True
+    add_step: False
+
+rand_process:
+  theta: 0.1
+  mu: 0.0
+  sigma: 0.2
+  dt: 1e-2
+  size: 18
+  sigma_min: 0.05
+  n_steps_annealing: 1e6
+
+repay_memory:
+  max_steps: 5000000
