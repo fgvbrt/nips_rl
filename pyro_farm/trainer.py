@@ -62,7 +62,7 @@ def main():
         config = yaml.load(f)
 
     # init state transform
-    state_transform = StateVelCentr(config['env_params']['state_transform'])
+    state_transform = StateVelCentr(**config['env_params']['state_transform'])
 
     # init model
     config['model_params']['state_size'] = state_transform.state_size
@@ -83,7 +83,7 @@ def main():
     # learning rate decay step
     actor_lr_step = (args.actor_lr - args.actor_lr_end) / args.max_steps
     critic_lr_step = (args.critic_lr - args.critic_lr_end) / args.max_steps
-    
+
 
     #
     #

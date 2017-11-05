@@ -10,6 +10,7 @@ from time import time
 from model import Agent, build_model
 import Pyro4
 import argparse
+from state import StateVelCentr
 
 
 def set_params_noise(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
@@ -69,7 +70,9 @@ class Sampler(object):
         self.rand_process = OrnsteinUhlenbeckProcess(**params)
 
     def create_env(self, params):
-        self.env_params = params
+        state_transform = StateVelCentr(**params['state_transform'])
+        self.env_params = params['env']
+        self.env_params['state_transform'] = state_transform
         self.env = RunEnv2(**params)
 
     def initialize(self, config, weights):
