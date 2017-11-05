@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # usage:
-#  ./start_samplers.sh host num_samplers port_start ns_host
+#  ./start_samplers.sh host port_start num_samplers ns_host
 
 host=$1
 port_start=$2
