@@ -78,7 +78,7 @@ class Sampler(object):
     def initialize(self, config, weights):
         self.create_actor(config['model_params'])
         self.create_env(config['env_params'])
-        self.rand_process(config['rand_process'])
+        self.create_rand_process(config['rand_process'])
         self.set_actor_weights(weights)
 
     @property
