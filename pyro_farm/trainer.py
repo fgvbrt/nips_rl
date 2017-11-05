@@ -14,6 +14,9 @@ from datetime import datetime
 from time import time
 import Pyro4
 import yaml
+import sys
+
+sys.excepthook = Pyro4.util.excepthook
 
 
 def get_args():

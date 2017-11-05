@@ -73,7 +73,7 @@ class Sampler(object):
         state_transform = StateVelCentr(**params['state_transform'])
         self.env_params = params['env']
         self.env_params['state_transform'] = state_transform
-        self.env = RunEnv2(**params)
+        self.env = RunEnv2(**self.env_params)
 
     def initialize(self, config, weights):
         self.create_actor(config['model_params'])
