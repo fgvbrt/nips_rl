@@ -135,10 +135,10 @@ class Sampler(object):
             terminals.append(terminal)
 
             ret = {
-                'states': np.asarray(states).astype(np.float32),
-                'actions': np.asarray(actions).astype(np.float32),
-                'rewards': np.asarray(rewards).astype(np.float32),
-                'terminals': np.asarray(terminals),
+                'states': np.asarray(states).astype(np.float32).tolist(),
+                'actions': np.asarray(actions).astype(np.float32).tolist(),
+                'rewards': np.asarray(rewards).astype(np.float32).tolist(),
+                'terminals': np.asarray(terminals).tolist(),
                 'total_reward': total_reward,
                 'total_reward_original': total_reward_original,
                 'steps': steps,
@@ -147,7 +147,7 @@ class Sampler(object):
 
             # if reward is higher than best give it to coordinator to check
             if self.best_reward is not  None and total_reward > self.best_reward:
-                ret['weights'] = self.actor.get_actor_weights()
+                ret['weights'] = self.actor.get_actor_weights().tolist()
 
             if self.total_episodes % 100 == 0:
                 self.env = RunEnv2(**self.env_params)
