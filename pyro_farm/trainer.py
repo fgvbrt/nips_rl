@@ -93,6 +93,7 @@ def main():
     train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
         build_model(**config['model_params'])
     actor = Agent(actor_fn, params_actor, params_crit)
+    actor.summary()
     if args.weights is not None:
         actor.load(args.weights)
     weights = [w.tolist() for w in actor.get_actor_weights()]
@@ -119,10 +120,6 @@ def main():
         config['train_params']['max_steps']
     )
 
-
-    # check sampling
-
-
     # start sampling
     samplers_results = {s: Pyro4.Future(s.run_episode)() for s in samplers}
 
@@ -140,6 +137,7 @@ def main():
             if res.ready:
                 res = res.value
                 total_steps += res['steps']
+                s.set_best_reward(best_reward)
 
                 # start new job
                 new_res = process_results(s, res, memory, weights, weights_from_samplers)
@@ -156,10 +154,10 @@ def main():
         # check if enough samles and can start training
         if len(memory) > config['train_params']['start_train_steps']:
             # batch2 if faster than batch1
-            batch = memory.random_batch2(args.batch_size)
+            batch = memory.random_batch2(config['train_params']['batch_size'])
 
             # flip states
-            if np.random.rand() < args.flip_prob:
+            if np.random.rand() < config['train_params']['flip_prob']:
                 states, actions, rewards, terminals, next_states = batch
 
                 states_flip = state_transform.flip_states(states)
@@ -188,9 +186,9 @@ def main():
             prev_steps += delta_steps
 
             actor_lr.set_value(lasagne.utils.floatX(
-                max(actor_lr.get_value() - delta_steps*actor_lr_step, args.actor_lr_end)))
+                max(actor_lr.get_value() - delta_steps*actor_lr_step, config['train_params']['actor_lr_end'])))
             critic_lr.set_value(lasagne.utils.floatX(
-                max(critic_lr.get_value() - delta_steps*critic_lr_step, args.critic_lr_end)))
+                max(critic_lr.get_value() - delta_steps*critic_lr_step, config['train_params']['critic_lr_end'])))
 
         # check if need to save and test
         if (time() - start_save)/60. > config['test_params']['save_period_min']:

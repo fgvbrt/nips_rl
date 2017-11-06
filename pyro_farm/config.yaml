@@ -1,6 +1,10 @@
 model_params:
   gamma: 0.9
   layer_norm: True
+  actor_hid_sizes: [64, 64, 32]
+  critic_hid_sizes: [64, 32]
+  actor_nonlinearity: 'elu'
+  critic_nonlinearity: 'tanh'
   critic_lr: 0.002
   actor_lr: 0.001
   num_act: 18

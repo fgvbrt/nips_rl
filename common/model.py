@@ -2,7 +2,6 @@ import theano
 import theano.tensor as T
 import lasagne
 from collections import OrderedDict
-import pickle
 import numpy as np
 from lasagne.layers import Layer, DenseLayer, NonlinearityLayer, InputLayer, ConcatLayer
 from lasagne import init
@@ -33,44 +32,60 @@ class LayerNorm(Layer):
         return (input - input_mean) * input_inv_std * self.gamma + self.beta
 
 
-def build_actor(l_input, num_act, last_nonlinearity=lasagne.nonlinearities.sigmoid,
-                hid_sizes=(64, 64), layer_norm=True,
-                nonlinearity=lasagne.nonlinearities.elu):
+def get_nonlinearity(nlinearity):
+    return {
+        'elu': lasagne.nonlinearities.elu,
+        'tanh': lasagne.nonlinearities.tanh,
+        'sigmoid': lasagne.nonlinearities.sigmoid
+    }[nlinearity]
+
+
+def build_actor(l_input, num_act, hid_sizes=(64, 64, 32),
+                layer_norm=True, nonlinearity='elu',
+                last_nonlinearity='sigmoid',):
     l_hid = l_input
     for hid_size in hid_sizes:
         l_hid = DenseLayer(l_hid, hid_size)
         if layer_norm:
             l_hid = LayerNorm(l_hid)
-        l_hid = NonlinearityLayer(l_hid, nonlinearity)
+        l_hid = NonlinearityLayer(l_hid, get_nonlinearity(nonlinearity))
 
-    return DenseLayer(l_hid, num_act, nonlinearity=last_nonlinearity)
+    return DenseLayer(l_hid, num_act, nonlinearity=get_nonlinearity(last_nonlinearity))
 
 
-def build_critic(l_input, hid_sizes=(64, 32), layer_norm=True,
-                 nonlinearity=lasagne.nonlinearities.tanh):
+def build_critic(l_input, hid_sizes=(64, 32),
+                 layer_norm=True, nonlinearity='tanh'):
     l_hid = l_input
     for hid_size in hid_sizes:
         l_hid = DenseLayer(l_hid, hid_size)
         if layer_norm:
             l_hid = LayerNorm(l_hid)
-        l_hid = NonlinearityLayer(l_hid, nonlinearity)
+        l_hid = NonlinearityLayer(l_hid, get_nonlinearity(nonlinearity))
 
     return DenseLayer(l_hid, 1, nonlinearity=None)
 
 
-def build_actor_critic(state_size, num_act, layer_norm):
+def build_actor_critic(state_size, num_act, layer_norm,
+                       actor_hid_sizes=(64, 64, 32),
+                       critic_hid_sizes=(64, 32),
+                       actor_nonlinearity='elu',
+                       critic_nonlinearity='tanh'):
     # input layers
     l_states = InputLayer([None, state_size])
     l_actions = InputLayer([None, num_act])
     l_input_critic = ConcatLayer([l_states, l_actions])
     # actor layer
-    l_actor = build_actor(l_states, num_act, layer_norm=layer_norm)
+    l_actor = build_actor(l_states, num_act, actor_hid_sizes, layer_norm, actor_nonlinearity)
     # critic layer
-    l_critic = build_critic(l_input_critic, layer_norm=layer_norm)
+    l_critic = build_critic(l_input_critic, critic_hid_sizes, layer_norm, critic_nonlinearity)
     return l_states, l_actions, l_actor, l_critic
 
 
 def build_model(state_size, num_act, gamma=0.99,
+                actor_hid_sizes=(64, 64, 32),
+                critic_hid_sizes=(64, 32),
+                actor_nonlinearity='elu',
+                critic_nonlinearity='tanh',
                 actor_lr=0.00025,
                 critic_lr=0.0005,
                 target_update_coeff=1e-4,
@@ -85,10 +100,11 @@ def build_model(state_size, num_act, gamma=0.99,
     terminals = T.col('terminals')
 
     # current network
-    l_states, l_actions, l_actor, l_critic = build_actor_critic(state_size, num_act, layer_norm)
+    l_states, l_actions, l_actor, l_critic = build_actor_critic(
+        state_size, num_act, layer_norm, actor_hid_sizes, critic_hid_sizes, actor_nonlinearity, critic_nonlinearity)
     # target network
-    l_states_target, l_actions_target, l_actor_target, l_critic_target =\
-        build_actor_critic(state_size, num_act, layer_norm)
+    l_states_target, l_actions_target, l_actor_target, l_critic_target = build_actor_critic(
+        state_size, num_act, layer_norm, actor_hid_sizes, critic_hid_sizes, actor_nonlinearity, critic_nonlinearity)
 
     # get current network output tensors
     actions_pred = lasagne.layers.get_output(l_actor, states)
@@ -164,6 +180,15 @@ class Agent(object):
         self.params_actor = params_actor
         self.params_actor_no_norm = [p for p in params_actor if p.name not in ('gamma', 'beta')]
         self.params_crit = params_crit
+
+    def summary(self):
+        print('Actor')
+        for p in self.params_actor:
+            print(p.name, p.get_value().shape)
+
+        print('\nCritic')
+        for p in self.params_crit:
+            print(p.name, p.get_value().shape)
 
     def get_actor_weights(self, exclude_norm=False):
         if exclude_norm:
