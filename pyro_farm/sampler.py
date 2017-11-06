@@ -135,37 +135,37 @@ class Sampler(object):
             if terminal:
                 break
 
-            self.total_episodes += 1
+        self.total_episodes += 1
 
-            # add data to buffers after episode end
-            states.append(state)
-            actions.append(np.zeros(self.env.noutput))
-            rewards.append(0)
-            terminals.append(terminal)
+        # add data to buffers after episode end
+        states.append(state)
+        actions.append(np.zeros(self.env.noutput))
+        rewards.append(0)
+        terminals.append(terminal)
 
-            ret = {
-                'states': np.asarray(states).astype(np.float32).tolist(),
-                'actions': np.asarray(actions).astype(np.float32).tolist(),
-                'rewards': np.asarray(rewards).astype(np.float32).tolist(),
-                'terminals': np.asarray(terminals).tolist(),
-                'total_reward': total_reward,
-                'total_reward_original': total_reward_original,
-                'steps': steps,
-                'time_took': time() - start,
-                'action_noise': action_noise
-            }
+        ret = {
+            'states': np.asarray(states).astype(np.float32).tolist(),
+            'actions': np.asarray(actions).astype(np.float32).tolist(),
+            'rewards': np.asarray(rewards).astype(np.float32).tolist(),
+            'terminals': np.asarray(terminals).tolist(),
+            'total_reward': total_reward,
+            'total_reward_original': total_reward_original,
+            'steps': steps,
+            'time_took': time() - start,
+            'action_noise': action_noise
+        }
 
-            # if reward is higher than best give it to coordinator to check
-            if self.best_reward is not None and total_reward > self.best_reward:
-                ret['weights'] = [w.tolist() for w in self.actor.get_actor_weights()]
+        # if reward is higher than best give it to coordinator to check
+        if self.best_reward is not None and total_reward > self.best_reward:
+            ret['weights'] = [w.tolist() for w in self.actor.get_actor_weights()]
 
-            if self.total_episodes % 100 == 0:
-                self.env = RunEnv2(**self.env_params)
+        if self.total_episodes % 100 == 0:
+            self.env = RunEnv2(**self.env_params)
 
-            # need to keep it for selecting param noise
-            self.last_states = ret['states']
+        # need to keep it for selecting param noise
+        self.last_states = ret['states']
 
-            return ret
+        return ret
 
 
 def get_args():

@@ -62,12 +62,12 @@ class ReplayMemory(object):
 
         # for states and action need to calculate idxs
         states_start_idx = self.top * self.state_size
-        states_end_idx = states_start_idx + np.prod(states.shape)
+        states_end_idx = states_start_idx + np.prod(np.shape(states))
         states_idxs = range(states_start_idx, states_end_idx)
         self.states.put(states_idxs, states, mode='wrap')
 
         act_start_idx = self.top * self.action_size
-        act_end_idx = act_start_idx + np.prod(actions.shape)
+        act_end_idx = act_start_idx + np.prod(np.shape(actions))
         act_idxs = range(act_start_idx, act_end_idx)
         self.actions.put(act_idxs, actions, mode='wrap')
 
