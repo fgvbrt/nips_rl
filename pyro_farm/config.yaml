@@ -24,9 +24,10 @@ test_params:
 
 env_params:
   env:
+    max_obstacles: 10
     skip_frame: 3
     reward_mult: 10
-    fall_penalty: -0.1
+    fall_penalty: -0.0
   state_transform:
     centr_state: 'pelvis_x'
     vel_states: []

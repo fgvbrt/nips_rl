@@ -4,9 +4,6 @@ os.environ['THEANO_FLAGS'] = 'device=gpu,floatX=float32'
 import argparse
 import numpy as np
 from model import build_model, Agent
-from time import sleep
-from multiprocessing import Process, Value, Queue
-import queue
 from memory import ReplayMemory
 from state import StateVelCentr
 import lasagne
@@ -27,15 +24,15 @@ def get_args():
     return parser.parse_args()
 
 
-def find_samplers():
-    samplers = []
+def find_workers(prefix):
+    workers = []
     with Pyro4.locateNS() as ns:
-        for sampler, sampler_uri in ns.list(prefix="sampler.").items():
-            print("found sampler", sampler)
-            samplers.append(Pyro4.Proxy(sampler_uri))
-    if not samplers:
-        raise ValueError("no samplers found! (have you started the samplers first?)")
-    return samplers
+        for sampler, sampler_uri in ns.list(prefix="{}.".format(prefix)).items():
+            print("found {}".format(prefix), sampler)
+            workers.append(Pyro4.Proxy(sampler_uri))
+    if not workers:
+        raise ValueError("no {} found!".format(prefix))
+    return workers
 
 
 def init_samplers(samplers, config, weights):
@@ -81,6 +78,9 @@ def main():
     with open('config.yaml') as f:
         config = yaml.load(f)
 
+    # add savedir to config
+    config['test_params']['save_dir'] = save_dir
+
     # save config
     with open(os.path.join(save_dir, 'config.yaml'), 'w') as f:
         yaml.dump(config, f)
@@ -99,8 +99,12 @@ def main():
     weights = [w.tolist() for w in actor.get_actor_weights()]
 
     # initialize samplers
-    samplers = find_samplers()
+    samplers = find_workers('sampler')
     init_samplers(samplers, config, weights)
+
+    # init tester
+    tester = find_workers('tester')[0]
+    tester.initialize(config, weights)
 
     # init replay memory
     memory = ReplayMemory(state_transform.state_size, 18, **config['repay_memory'])
@@ -131,7 +135,10 @@ def main():
     weights_from_samplers = []
     start = time()
     start_save = start
+    start_test = start
+    tester_res = Pyro4.Future(tester.test_model)(weights, best_reward)
     # main train loop
+    print('start train loop')
     while total_steps < config['train_params']['max_steps']:
         for s, res in samplers_results.items():
             if res.ready:
@@ -176,11 +183,11 @@ def main():
             actor_loss, critic_loss = train_fn(*batch)
             updates += 1
             if np.isnan(actor_loss):
-                raise Value('actor loss is nan')
+                raise ValueError('actor loss is nan')
             if np.isnan(critic_loss):
-                raise Value('critic loss is nan')
+                raise ValueError('critic loss is nan')
             target_update_fn()
-            weights = actor.get_actor_weights()
+            weights = [w.tolist() for w in actor.get_actor_weights()]
 
             delta_steps = total_steps - prev_steps
             prev_steps += delta_steps
@@ -192,30 +199,27 @@ def main():
 
         # check if need to save and test
         if (time() - start_save)/60. > config['test_params']['save_period_min']:
-            fname = os.path.join(save_dir, 'weights_updates_{}.h5'.format(updates.value))
+            fname = os.path.join(save_dir, 'weights_updates_{}.h5'.format(updates))
             actor.save(fname)
             start_save = time()
 
-        #  start new test process
-    #     weights_rew_to_check = [(w, r) for w, r in weights_rew_to_check if r > best_reward.value]
-    #     if ((time() - start_test) / 60. > args.test_period_min or len(weights_rew_to_check) > 0) and testing.value == 0:
-    #         testing.value = 1
-    #         print('start test')
-    #         if len(weights_rew_to_check) > 0:
-    #             _weights, _ = weights_rew_to_check.pop()
-    #         else:
-    #             _weights = weights
-    #         worker = Process(target=test_agent,
-    #                          args=(testing, state_transform, args.num_test_episodes,
-    #                                model_params, _weights, best_reward, updates, save_dir)
-    #                          )
-    #         worker.daemon = True
-    #         worker.start()
-    #         start_test = time()
-    #
-    # # end all processes
-    # for w in workers:
-    #     w.join()
+        # check if can start new test process
+        weights_from_samplers = [(w, r) for w, r in weights_from_samplers if r > best_reward]
+        if ((time() - start_test) / 60. > config['test_params']['test_period_min'] or len(weights_from_samplers) > 0) \
+                and tester_res.ready:
+            # save best reward
+            test_reward = tester_res.value
+            if test_reward > best_reward:
+                best_reward = test_reward
+
+            print('start test')
+            if len(weights_from_samplers) > 0:
+                _weights, _ = weights_from_samplers.pop()
+            else:
+                _weights = weights
+
+            tester_res = Pyro4.Future(tester.test_model)(_weights, best_reward)
+            start_test = time()
 
 
 if __name__ == '__main__':
