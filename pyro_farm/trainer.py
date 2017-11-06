@@ -204,7 +204,7 @@ def main():
             start_save = time()
 
         # check if can start new test process
-        weights_from_samplers = [(w, r) for w, r in weights_from_samplers if r > best_reward]
+        weights_from_samplers = [(w, r) for w, r in weights_from_samplers if r > best_reward and r > 0]
         if ((time() - start_test) / 60. > config['test_params']['test_period_min'] or len(weights_from_samplers) > 0) \
                 and tester_res.ready:
             # save best reward

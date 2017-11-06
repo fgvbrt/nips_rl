@@ -156,7 +156,7 @@ class Sampler(object):
         }
 
         # if reward is higher than best give it to coordinator to check
-        if self.best_reward is not None and total_reward > self.best_reward:
+        if self.best_reward is not None and total_reward > self.best_reward and total_reward > 0:
             ret['weights'] = [w.tolist() for w in self.actor.get_actor_weights()]
 
         if self.total_episodes % 100 == 0:
