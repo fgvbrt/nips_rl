@@ -32,6 +32,7 @@ def find_workers(prefix):
             workers.append(Pyro4.Proxy(sampler_uri))
     if not workers:
         raise ValueError("no {} found!".format(prefix))
+    print('found total {} {}s'.format(len(workers), prefix))
     return workers
 
 

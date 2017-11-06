@@ -1,5 +1,5 @@
 model_params:
-  gamma: 0.9
+  gamma: 0.95
   layer_norm: True
   actor_hid_sizes: [64, 64, 32]
   critic_hid_sizes: [64, 32]
