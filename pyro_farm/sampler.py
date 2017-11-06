@@ -1,6 +1,6 @@
 import os
 os.environ['OMP_NUM_THREADS'] = '1'
-os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float32'
+os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float64'
 
 from environments import RunEnv2
 import numpy as np

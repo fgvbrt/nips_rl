@@ -1,5 +1,5 @@
 import os
-os.environ['THEANO_FLAGS'] = 'device=gpu,floatX=float32'
+os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float64'
 
 import argparse
 import numpy as np

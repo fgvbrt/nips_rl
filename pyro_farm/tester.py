@@ -1,6 +1,6 @@
 import os
 os.environ['OMP_NUM_THREADS'] = '1'
-os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float32'
+os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float64'
 import Pyro4
 import numpy as np
 from model import build_model, Agent
@@ -86,7 +86,7 @@ def get_args():
     parser.add_argument('--port', type=int, default=1234, help="Host port.")
     parser.add_argument('--nathost', type=str, default=None, help="Nat name.")
     parser.add_argument('--natport', type=int, default=None, help="Nat port.")
-    parser.add_argument('--ns_host', type=str, default='192.168.1.130', help="Name server host.")
+    parser.add_argument('--ns_host', type=str, default=None, help="Name server host.")
     return parser.parse_args()
 
 
