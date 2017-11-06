@@ -178,4 +178,4 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         del terminals[:]
 
         if total_episodes % 100 == 0:
-            env = RunEnv2(state_transform, max_obstacles=10, skip_frame=5)
+            env = RunEnv2(state_transform, max_obstacles=10, skip_frame=config.skip_frames)

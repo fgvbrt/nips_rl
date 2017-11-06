@@ -88,7 +88,7 @@ class Sampler(object):
     def _sample_params_noise(self):
         action_noise = np.random.rand() < 0.7
         if self.last_states is not None and self.initialized and not action_noise:
-            set_params_noise(self.actor, self.last_states, self.random_process.current_sigma)
+            set_params_noise(self.actor, self.last_states, self.rand_process.current_sigma)
         return action_noise
 
     def run_episode(self):
@@ -151,12 +151,13 @@ class Sampler(object):
                 'total_reward': total_reward,
                 'total_reward_original': total_reward_original,
                 'steps': steps,
-                'time_took': time() - start
+                'time_took': time() - start,
+                'action_noise': action_noise
             }
 
             # if reward is higher than best give it to coordinator to check
-            if self.best_reward is not  None and total_reward > self.best_reward:
-                ret['weights'] = self.actor.get_actor_weights().tolist()
+            if self.best_reward is not None and total_reward > self.best_reward:
+                ret['weights'] = [w.tolist() for w in self.actor.get_actor_weights()]
 
             if self.total_episodes % 100 == 0:
                 self.env = RunEnv2(**self.env_params)

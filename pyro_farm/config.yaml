@@ -1,13 +1,13 @@
 model_params:
   gamma: 0.9
   layer_norm: True
-  critic_lr: 2e-3
-  actor_lr: 1e-3
+  critic_lr: 0.002
+  actor_lr: 0.001
   num_act: 18
 
 train_params:
-  critic_lr_end: 5e-5
-  actor_lr_end: 5e-5
+  critic_lr_end: 0.00005
+  actor_lr_end: 0.00005
   flip_prob: 1
   start_train_steps: 10000
   batch_size: 1000
@@ -35,7 +35,7 @@ rand_process:
   theta: 0.1
   mu: 0.0
   sigma: 0.2
-  dt: 1e-2
+  dt: 0.01
   size: 18
   sigma_min: 0.05
   n_steps_annealing: 1e6

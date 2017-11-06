@@ -8,3 +8,4 @@ log
 *.tar.gz
 *.h5
 *.h5_last
+*weights/
