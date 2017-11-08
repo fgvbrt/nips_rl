@@ -1,5 +1,5 @@
 import os
-os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float64'
+os.environ['THEANO_FLAGS'] = 'device=cpu'
 os.environ['OMP_NUM_THREADS'] = '2'
 
 import argparse

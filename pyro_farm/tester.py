@@ -1,6 +1,6 @@
 import os
 os.environ['OMP_NUM_THREADS'] = '2'
-os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float32'
+os.environ['THEANO_FLAGS'] = 'device=cpu'
 import Pyro4
 import numpy as np
 from model import build_model, Agent
