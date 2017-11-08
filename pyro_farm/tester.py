@@ -1,5 +1,5 @@
 import os
-os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '2'
 os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float32'
 import Pyro4
 import numpy as np
@@ -20,12 +20,12 @@ class Tester(object):
         self.save_dir = None
 
     def create_actor(self, params):
-        train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
+        _, _, _, actor_fn, _, params_actor, params_crit, _, _ = \
             build_model(**params)
         self.actor = Agent(actor_fn, params_actor, params_crit)
 
     def set_actor_weights(self, weights):
-        self.actor.set_actor_weights(weights)
+        self.actor.set_weights(*weights)
 
     def create_env(self, params):
         state_transform = StateVelCentr(**params['state_transform'])
@@ -45,13 +45,14 @@ class Tester(object):
 
     def test_model(self, weights, best_reward):
         # set weights of actor
-        self.actor.set_actor_weights(weights)
+        self.actor.set_weights(*weights)
 
         # init new env
         env = RunEnv2(**self.env_params)
 
         # start testing
         test_rewards = []
+        print('\nstart testing')
         for ep in range(self.num_test_episodes):
             seed = random.randrange(2 ** 32 - 2)
             state = env.reset(seed=seed, difficulty=2)
@@ -64,19 +65,21 @@ class Tester(object):
                 if terminal:
                     break
 
+            print('test reward {:.2f}'.format(test_reward))
             test_rewards.append(test_reward)
 
         mean_reward = np.mean(test_rewards)
         std_reward = np.std(test_rewards)
 
-        print('test reward mean: {:.2f}, std: {:.2f}, all: {} '.
-              format(float(mean_reward), float(std_reward), test_rewards))
+        print('test reward mean: {:.2f}, std: {:.2f}'.format(float(mean_reward), float(std_reward)))
 
+        ret_weights = None
         if mean_reward > best_reward or mean_reward > 30 * env.reward_mult:
             fname = os.path.join(self.save_dir, 'weights_reward_{:.2f}.h5'.format(mean_reward))
             self.actor.save(fname)
+            ret_weights = [w.tolist() for w in self.actor.get_actor_weights()]
 
-        return mean_reward
+        return mean_reward, ret_weights
 
 
 def get_args():

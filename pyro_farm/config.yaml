@@ -1,10 +1,10 @@
 model_params:
-  gamma: 0.95
+  gamma: 0.9
   layer_norm: True
   actor_hid_sizes: [64, 64, 32]
   critic_hid_sizes: [64, 32]
   actor_nonlinearity: 'elu'
-  critic_nonlinearity: 'tanh'
+  critic_nonlinearity: 'elu'
   critic_lr: 0.002
   actor_lr: 0.001
   num_act: 18
@@ -13,7 +13,8 @@ train_params:
   critic_lr_end: 0.00005
   actor_lr_end: 0.00005
   flip_prob: 1
-  start_train_steps: 10000
+  start_train_steps_actor: 100000
+  start_train_steps_critic: 10000
   batch_size: 1000
   max_steps: 10000000
 
@@ -25,7 +26,7 @@ test_params:
 env_params:
   env:
     max_obstacles: 10
-    skip_frame: 3
+    skip_frame: 1
     reward_mult: 10
     fall_penalty: -0.0
   state_transform:
@@ -33,7 +34,7 @@ env_params:
     vel_states: []
     obstacles_mode: 'standard'
     exclude_centr: True
-    predict_bodies: True
+    predict_bodies: False
     add_step: False
 
 rand_process:
@@ -46,4 +47,4 @@ rand_process:
   n_steps_annealing: 1e6
 
 repay_memory:
-  max_steps: 5000000
+  max_steps: 1000000

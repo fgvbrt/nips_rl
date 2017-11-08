@@ -59,7 +59,7 @@ class Sampler(object):
         self.best_reward = val
 
     def create_actor(self, params):
-        train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
+        _, _, _, actor_fn, _, params_actor, params_crit, _, _ = \
             build_model(**params)
         self.actor = Agent(actor_fn, params_actor, params_crit)
 
@@ -85,11 +85,16 @@ class Sampler(object):
     def initialized(self):
         return self.actor is not None and self.rand_process is not None and self.env is not None
 
-    def _sample_params_noise(self):
-        action_noise = np.random.rand() < 0.7
-        if self.last_states is not None and self.initialized and not action_noise:
-            set_params_noise(self.actor, self.last_states, self.rand_process.current_sigma)
-        return action_noise
+    def _sample_noise_type(self):
+        tmp = np.random.rand()
+        noise_type = 'no_noise'
+        if tmp < 0.7:
+            noise_type = 'actions'
+        elif tmp < 0.9:
+            if self.last_states is not None and self.initialized:
+                noise_type = 'params'
+                set_params_noise(self.actor, self.last_states, self.rand_process.current_sigma)
+        return noise_type
 
     def run_episode(self):
 
@@ -100,7 +105,7 @@ class Sampler(object):
         terminals = []
 
         start = time()
-        action_noise = self._sample_params_noise()
+        noise_type = self._sample_noise_type()
 
         seed = random.randrange(2 ** 32 - 2)
         state = self.env.reset(seed=seed, difficulty=2)
@@ -115,7 +120,7 @@ class Sampler(object):
             state = np.asarray(state, dtype='float32')
             action = self.actor.act(state)
 
-            if action_noise:
+            if noise_type == 'actions':
                 action += self.rand_process.sample()
 
             next_state, reward, next_terminal, info = self.env.step(action)
@@ -152,11 +157,12 @@ class Sampler(object):
             'total_reward_original': total_reward_original,
             'steps': steps,
             'time_took': time() - start,
-            'action_noise': action_noise
+            'noise_type': noise_type
         }
 
         # if reward is higher than best give it to coordinator to check
-        if self.best_reward is not None and total_reward > self.best_reward and total_reward > 0:
+        if self.best_reward is not None and total_reward > self.best_reward \
+                and total_reward > 0 and noise_type == 'params':
             ret['weights'] = [w.tolist() for w in self.actor.get_actor_weights()]
 
         if self.total_episodes % 100 == 0:

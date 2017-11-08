@@ -141,7 +141,7 @@ def build_model(state_size, num_act, gamma=0.99,
     params_target = lasagne.layers.get_all_params(l_actor_target) + \
                     lasagne.layers.get_all_params(l_critic_target)
 
-    # set critic target to critic params
+    # set target params to current params
     for param, param_target in zip(params, params_target):
         param_target.set_value(param.get_value())
 
@@ -168,10 +168,15 @@ def build_model(state_size, num_act, gamma=0.99,
     # compile theano functions
     train_fn = theano.function([states, actions, rewards, terminals, next_states],
                                [actor_loss, critic_loss], updates=updates)
+    train_actor = theano.function([states],
+                                  actor_loss, updates=actor_updates)
+    train_critic = theano.function([states, actions, rewards, terminals, next_states],
+                                   critic_loss, updates=critic_updates)
     actor_fn = theano.function([states], actions_pred)
     target_update_fn = theano.function([], updates=target_updates)
 
-    return train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr
+    return train_fn, train_actor, train_critic, actor_fn, target_update_fn, \
+           params_actor, params_crit, actor_lr, critic_lr
 
 
 class Agent(object):

@@ -1,5 +1,6 @@
 import os
-os.environ['THEANO_FLAGS'] = 'device=gpu,floatX=float32'
+os.environ['THEANO_FLAGS'] = 'device=cpu,floatX=float64'
+os.environ['OMP_NUM_THREADS'] = '2'
 
 import argparse
 import numpy as np
@@ -91,17 +92,18 @@ def main():
 
     # init model
     config['model_params']['state_size'] = state_transform.state_size
-    train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
+    train_fn, train_actor, train_critic, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
         build_model(**config['model_params'])
     actor = Agent(actor_fn, params_actor, params_crit)
     actor.summary()
     if args.weights is not None:
         actor.load(args.weights)
-    weights = [w.tolist() for w in actor.get_actor_weights()]
+    weights = [[w.tolist() for w in weights] for weights in actor.get_weights()]
+    weights_actor, weights_critic = weights
 
     # initialize samplers
     samplers = find_workers('sampler')
-    init_samplers(samplers, config, weights)
+    init_samplers(samplers, config, weights_actor)
 
     # init tester
     tester = find_workers('tester')[0]
@@ -134,10 +136,17 @@ def main():
     updates = 0
     best_reward = -1e8
     weights_from_samplers = []
+    samplers_weights = False
     start = time()
     start_save = start
     start_test = start
     tester_res = Pyro4.Future(tester.test_model)(weights, best_reward)
+
+    start_train_steps_actor = config['train_params']['start_train_steps_actor']
+    start_train_steps_critic = config['train_params']['start_train_steps_critic']
+    start_train_steps_min = min(start_train_steps_actor, start_train_steps_critic)
+    start_train_steps_max = max(start_train_steps_actor, start_train_steps_critic)
+
     # main train loop
     print('start train loop')
     while total_steps < config['train_params']['max_steps']:
@@ -148,7 +157,7 @@ def main():
                 s.set_best_reward(best_reward)
 
                 # start new job
-                new_res = process_results(s, res, memory, weights, weights_from_samplers)
+                new_res = process_results(s, res, memory, weights[0], weights_from_samplers)
                 samplers_results[s] = new_res
 
                 # report progress on this episode
@@ -160,13 +169,13 @@ def main():
                 print(report_str)
 
         # check if enough samles and can start training
-        if len(memory) > config['train_params']['start_train_steps']:
+        if total_steps > start_train_steps_min:
             # batch2 if faster than batch1
             batch = memory.random_batch2(config['train_params']['batch_size'])
+            states, actions, rewards, terminals, next_states = batch
 
             # flip states
             if np.random.rand() < config['train_params']['flip_prob']:
-                states, actions, rewards, terminals, next_states = batch
 
                 states_flip = state_transform.flip_states(states)
                 next_states_flip = state_transform.flip_states(next_states)
@@ -174,21 +183,31 @@ def main():
                 actions_flip[:, :9] = actions[:, 9:]
                 actions_flip[:, 9:] = actions[:, :9]
 
-                states_all = np.concatenate((states, states_flip))
-                actions_all = np.concatenate((actions, actions_flip))
-                rewards_all = np.tile(rewards.ravel(), 2).reshape(-1, 1)
-                terminals_all = np.tile(terminals.ravel(), 2).reshape(-1, 1)
-                next_states_all = np.concatenate((next_states, next_states_flip))
-                batch = (states_all, actions_all, rewards_all, terminals_all, next_states_all)
+                states = np.concatenate((states, states_flip))
+                actions = np.concatenate((actions, actions_flip))
+                rewards = np.tile(rewards.ravel(), 2).reshape(-1, 1)
+                terminals = np.tile(terminals.ravel(), 2).reshape(-1, 1)
+                next_states = np.concatenate((next_states, next_states_flip))
+                batch = (states, actions, rewards, terminals, next_states)
 
-            actor_loss, critic_loss = train_fn(*batch)
+            # choose actor or critic to train
+            actor_loss = critic_loss = 0
+            if total_steps > start_train_steps_max:
+                actor_loss, critic_loss = train_fn(*batch)
+            elif total_steps > start_train_steps_actor:
+                actor_loss = train_actor(states)
+            elif total_steps > start_train_steps_critic:
+                critic_loss = train_critic(*batch)
+
             updates += 1
+            target_update_fn()
             if np.isnan(actor_loss):
                 raise ValueError('actor loss is nan')
             if np.isnan(critic_loss):
                 raise ValueError('critic loss is nan')
-            target_update_fn()
-            weights = [w.tolist() for w in actor.get_actor_weights()]
+
+            weights = [[w.tolist() for w in weights] for weights in actor.get_weights()]
+            weights_actor, weights_critic = weights
 
             delta_steps = total_steps - prev_steps
             prev_steps += delta_steps
@@ -209,15 +228,19 @@ def main():
         if ((time() - start_test) / 60. > config['test_params']['test_period_min'] or len(weights_from_samplers) > 0) \
                 and tester_res.ready:
             # save best reward
-            test_reward = tester_res.value
+            test_reward, test_weights = tester_res.value
             if test_reward > best_reward:
                 best_reward = test_reward
+                if test_weights is not None and samplers_weights:
+                    print('set sampler actor weights')
+                    actor.set_actor_weights(test_weights)
 
-            print('start test')
             if len(weights_from_samplers) > 0:
-                _weights, _ = weights_from_samplers.pop()
+                _weights = [weights_from_samplers.pop()[0], weights_critic]
+                samplers_weights = True
             else:
                 _weights = weights
+                samplers_weights = False
 
             tester_res = Pyro4.Future(tester.test_model)(_weights, best_reward)
             start_test = time()
