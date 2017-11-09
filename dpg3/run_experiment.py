@@ -22,9 +22,9 @@ import config
 def get_args():
     parser = argparse.ArgumentParser(description="Run commands")
     parser.add_argument('--gamma', type=float, default=0.9, help="Discount factor for reward.")
-    parser.add_argument('--num_agents', type=int, default=cpu_count()-1, help="Number of agents to run.")
+    parser.add_argument('--num_agents', type=int, default=cpu_count()-2, help="Number of agents to run.")
     parser.add_argument('--sleep', type=int, default=0, help="Sleep time in seconds before start each worker.")
-    parser.add_argument('--max_steps', type=int, default=10000000, help="Number of steps.")
+    parser.add_argument('--max_steps', type=int, default=100000000, help="Number of steps.")
     parser.add_argument('--test_period_min', default=30, type=int, help="Test interval int min.")
     parser.add_argument('--save_period_min', default=30, type=int, help="Save interval int min.")
     parser.add_argument('--num_test_episodes', type=int, default=5, help="Number of test episodes.")
@@ -35,7 +35,6 @@ def get_args():
     parser.add_argument('--critic_lr_end', type=float, default=5e-5, help="critic learning rate")
     parser.add_argument('--actor_lr_end', type=float, default=5e-5, help="actor learning rate.")
     parser.add_argument('--flip_prob', type=float, default=1., help="Probability of flipping.")
-    parser.add_argument('--layer_norm', action='store_true', help="Use layer normaliation.")
     parser.add_argument('--exp_name', type=str, default=datetime.now().strftime("%d.%m.%Y-%H:%M"),
                         help='Experiment name')
     parser.add_argument('--weights', type=str, default=None, help='weights to load')
@@ -98,7 +97,7 @@ def main():
         'gamma': args.gamma,
         'actor_lr': args.actor_lr,
         'critic_lr': args.critic_lr,
-        'layer_norm': args.layer_norm
+        'layer_norm': True
     }
     train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
         build_model(**model_params)

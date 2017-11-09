@@ -99,7 +99,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
 
     total_episodes = 0
     start = time()
-    action_noise = True
+    noise_type = 'actions'
     while global_step.value < max_steps:
         seed = random.randrange(2**32-2)
         state = env.reset(seed=seed, difficulty=2)
@@ -113,7 +113,7 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         while not terminal:
             state = np.asarray(state, dtype='float32')
             action = actor.act(state)
-            if action_noise:
+            if noise_type == 'actions':
                 action += random_process.sample()
 
             next_state, reward, next_terminal, info = env.step(action)
@@ -160,15 +160,19 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         report_str = 'Global step: {}, steps/sec: {:.2f}, updates: {}, episode len {}, ' \
                      'reward: {:.2f}, original_reward {:.4f}; best reward: {:.2f} noise {}'. \
             format(global_step.value, 1. * global_step.value / (time() - start), updates.value, steps,
-                   total_reward, total_reward_original, best_reward.value, 'actions' if action_noise else 'params')
+                   total_reward, total_reward_original, best_reward.value, noise_type)
         print(report_str)
 
         with open('report.log', 'a') as f:
             f.write(report_str + '\n')
 
         actor.set_actor_weights(weights)
-        action_noise = np.random.rand() < 0.7
-        if not action_noise:
+        tmp = np.random.rand() < 0.7
+        noise_type = 'no_noise'
+        if tmp < 0.7:
+            noise_type = 'actions'
+        elif tmp < 0.9:
+            noise_type = 'params'
             set_params_noise(actor, states_np, random_process.current_sigma)
 
         # clear buffers
@@ -178,4 +182,4 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         del terminals[:]
 
         if total_episodes % 100 == 0:
-            env = RunEnv2(state_transform, max_obstacles=10, skip_frame=5)
+            env = RunEnv2(state_transform, max_obstacles=10, skip_frame=config.skip_frames)

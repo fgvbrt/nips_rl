@@ -34,7 +34,7 @@ class LayerNorm(Layer):
 
 
 def build_actor(l_input, num_act, last_nonlinearity=lasagne.nonlinearities.sigmoid,
-                hid_sizes=(64, 64), layer_norm=True,
+                hid_sizes=(128, 64, 32), layer_norm=True,
                 nonlinearity=lasagne.nonlinearities.elu):
     l_hid = l_input
     for hid_size in hid_sizes:
@@ -47,7 +47,7 @@ def build_actor(l_input, num_act, last_nonlinearity=lasagne.nonlinearities.sigmo
 
 
 def build_critic(l_input, hid_sizes=(64, 32), layer_norm=True,
-                 nonlinearity=lasagne.nonlinearities.tanh):
+                 nonlinearity=lasagne.nonlinearities.elu):
     l_hid = l_input
     for hid_size in hid_sizes:
         l_hid = DenseLayer(l_hid, hid_size)

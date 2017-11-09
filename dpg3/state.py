@@ -160,8 +160,7 @@ class State(object):
         elif self.obstacles_mode == 'standard':
             if not is_obst:
                 return [-1., 0., 0., is_obst], 0.
-            obst_features = np.clip(state[-3:], -10., 10.)
-            return np.append(obst_features, is_obst), 0.
+            return np.append(state[-3:], is_obst), 0.
         elif self.obstacles_mode == 'gird':
             mass_x = state[self.state_names.index('mass_x')]
             obst_grid = np.zeros(self.obst_grid_points)
