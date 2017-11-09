@@ -28,7 +28,7 @@ def get_args():
     parser.add_argument('--test_period_min', default=30, type=int, help="Test interval int min.")
     parser.add_argument('--save_period_min', default=30, type=int, help="Save interval int min.")
     parser.add_argument('--num_test_episodes', type=int, default=5, help="Number of test episodes.")
-    parser.add_argument('--batch_size', type=int, default=1000, help="Batch size.")
+    parser.add_argument('--batch_size', type=int, default=200, help="Batch size.")
     parser.add_argument('--start_train_steps', type=int, default=10000, help="Number of steps tp start training.")
     parser.add_argument('--critic_lr', type=float, default=2e-3, help="critic learning rate")
     parser.add_argument('--actor_lr', type=float, default=1e-3, help="actor learning rate.")
