@@ -163,11 +163,12 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
                    total_reward, total_reward_original, best_reward.value, noise_type)
         print(report_str)
 
-        with open('report.log', 'a') as f:
-            f.write(report_str + '\n')
+        #with open('report.log', 'a') as f:
+        #    f.write(report_str + '\n')
 
         actor.set_actor_weights(weights)
-        tmp = np.random.rand() < 0.7
+        tmp = np.random.rand()
+        print(tmp)
         noise_type = 'no_noise'
         if tmp < 0.7:
             noise_type = 'actions'
@@ -182,4 +183,4 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         del terminals[:]
 
         if total_episodes % 100 == 0:
-            env = RunEnv2(state_transform, max_obstacles=10, skip_frame=config.skip_frames)
+            env = RunEnv2(state_transform, max_obstacles=config.num_obstacles, skip_frame=config.skip_frames)

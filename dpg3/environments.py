@@ -4,8 +4,8 @@ from gym.spaces import Box, MultiBinary
 
 
 class RunEnv2(RunEnv):
-    def __init__(self, state_transform, visualize=False, max_obstacles=3,
-                 skip_frame=5, reward_mult=10., fall_penalty=-0.1):
+    def __init__(self, state_transform, visualize=False, max_obstacles=10,
+                 skip_frame=5, reward_mult=10., fall_penalty=0):
         super(RunEnv2, self).__init__(visualize, max_obstacles)
         self.state_transform = state_transform
         self.observation_space = Box(-1000, 1000, state_transform.state_size)

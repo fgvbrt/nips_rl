@@ -59,7 +59,7 @@ def _get_pattern_idxs(lst, pattern):
 
 class State(object):
     def __init__(self, obstacles_mode='bodies_dist', obst_grid_dist=1,
-                 grid_points=100, predict_bodies=True, add_step=True):
+                 grid_points=100, predict_bodies=False, add_step=False):
         assert obstacles_mode in ['exclude', 'grid', 'bodies_dist', 'standard']
 
         self.state_idxs = [i for i, n in enumerate(get_state_names(True, True)) if n not in ['pelvis2_x', 'pelvis2_y']]
@@ -246,7 +246,7 @@ class State(object):
 
 class StateVel(State):
     def __init__(self, vel_states=get_bodies_names(), obstacles_mode='bodies_dist',
-                 add_step=True, predict_bodies=True):
+                 add_step=False, predict_bodies=False):
         super(StateVel, self).__init__(obstacles_mode=obstacles_mode,
                                        predict_bodies=predict_bodies,
                                        add_step=add_step)
@@ -274,7 +274,7 @@ class StateVelCentr(State):
     def __init__(self, centr_state='pelvis_x', vel_states=get_bodies_names(),
                  states_to_center=get_names_to_center('pelvis'),
                  vel_before_centr=True, obstacles_mode='bodies_dist',
-                 exclude_centr=False, predict_bodies=True, add_step=True):
+                 exclude_centr=False, predict_bodies=False, add_step=False):
         super(StateVelCentr, self).__init__(obstacles_mode=obstacles_mode,
                                             predict_bodies=predict_bodies,
                                             add_step=add_step)

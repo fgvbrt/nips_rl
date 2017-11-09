@@ -87,6 +87,7 @@ def main():
 
     state_transform = StateVelCentr(obstacles_mode='standard',
                                     exclude_centr=True,
+                                    vel_states=[]
                                     )
     num_actions = 18
 
