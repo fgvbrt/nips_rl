@@ -1,12 +1,12 @@
 model_params:
   gamma: 0.9
   layer_norm: True
-  actor_hid_sizes: [64, 64, 32]
+  actor_hid_sizes: [64, 64]
   critic_hid_sizes: [64, 32]
   actor_nonlinearity: 'elu'
   critic_nonlinearity: 'elu'
-  critic_lr: 0.002
-  actor_lr: 0.001
+  critic_lr: 0.0002
+  actor_lr: 0.0001
   num_act: 18
 
 train_params:
@@ -26,7 +26,7 @@ test_params:
 env_params:
   env:
     max_obstacles: 10
-    skip_frame: 1
+    skip_frame: 4
     reward_mult: 10
     fall_penalty: -0.0
   state_transform:

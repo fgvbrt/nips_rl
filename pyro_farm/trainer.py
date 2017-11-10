@@ -164,7 +164,7 @@ def main():
                              'reward: {:.2f}, original_reward {:.4f}; best reward: {:.2f} noise {}'. \
                     format(total_steps, 1. * total_steps / (time() - start), updates,
                            res['steps'], res['total_reward'], res['total_reward_original'],
-                           best_reward, 'actions' if res['action_noise'] else 'params')
+                           best_reward, res['noise_type'])
                 print(report_str)
 
         # check if enough samles and can start training

@@ -5,7 +5,7 @@ from collections import OrderedDict
 import numpy as np
 from lasagne.layers import Layer, DenseLayer, NonlinearityLayer, InputLayer, ConcatLayer
 from lasagne import init
-from pkl2h5 import write_h5, read_h5
+from .pkl2h5 import write_h5, read_h5
 
 
 class LayerNorm(Layer):

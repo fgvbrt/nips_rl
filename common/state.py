@@ -59,13 +59,14 @@ def _get_pattern_idxs(lst, pattern):
 
 class State(object):
     def __init__(self, obstacles_mode='bodies_dist', obst_grid_dist=1,
-                 grid_points=100, predict_bodies=True, add_step=True):
+                     grid_points=100, predict_bodies=True, add_step=True, osb_first=False):
         assert obstacles_mode in ['exclude', 'grid', 'bodies_dist', 'standard']
 
         self.state_idxs = [i for i, n in enumerate(get_state_names(True, True)) if n not in ['pelvis2_x', 'pelvis2_y']]
         self.state_names = get_state_names()
         self.step = 0
         self.add_step = add_step
+        self.osb_first = osb_first
         self.obstacles_mode = obstacles_mode
         self.obstacles = OrderedDict()
 
@@ -205,6 +206,9 @@ class State(object):
         state = np.asarray(state)
         state = state[self.state_idxs]
 
+        if self.osb_first and self.step == 0:
+            state[-3:] = [100, 0, 0]
+
         self._add_obstacle(state)
         obst_state, obst_reward = self._get_obstacle_state_reward(state)
         state_orig = state[:-3]
@@ -247,10 +251,11 @@ class State(object):
 
 class StateVel(State):
     def __init__(self, vel_states=get_bodies_names(), obstacles_mode='bodies_dist',
-                 add_step=True, predict_bodies=True):
+                 add_step=True, predict_bodies=True, osb_first=False):
         super(StateVel, self).__init__(obstacles_mode=obstacles_mode,
                                        predict_bodies=predict_bodies,
-                                       add_step=add_step)
+                                       add_step=add_step,
+                                       osb_first=osb_first)
         self.vel_idxs = [self.state_names.index(k) for k in vel_states]
         self.prev_vals = None
         self.state_names += [n + '_vel' for n in vel_states]
@@ -275,10 +280,12 @@ class StateVelCentr(State):
     def __init__(self, centr_state='pelvis_x', vel_states=get_bodies_names(),
                  states_to_center=get_names_to_center('pelvis'),
                  vel_before_centr=True, obstacles_mode='bodies_dist',
-                 exclude_centr=False, predict_bodies=True, add_step=True):
+                 exclude_centr=False, predict_bodies=True,
+                 add_step=True, osb_first=False):
         super(StateVelCentr, self).__init__(obstacles_mode=obstacles_mode,
                                             predict_bodies=predict_bodies,
-                                            add_step=add_step)
+                                            add_step=add_step,
+                                                osb_first=osb_first)
 
         # center
         self.centr_idx = self.state_names.index(centr_state)
