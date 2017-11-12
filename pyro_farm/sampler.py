@@ -4,7 +4,6 @@ os.environ['OMP_NUM_THREADS'] = '1'
 from environments import RunEnv2
 import numpy as np
 import random
-from random_process import OrnsteinUhlenbeckProcess, RandomActivation
 from time import time
 from model import Agent, build_model
 import Pyro4
@@ -12,50 +11,14 @@ import argparse
 from state import StateVelCentr
 
 
-def set_params_noise(actor, states, target_d=0.2, tol=1e-3, max_steps=1000):
-    orig_weights = actor.get_actor_weights(True)
-    orig_act = actor.act_batch(states)
-
-    sigma_min = 0.
-    sigma_max = 100.
-    sigma = sigma_max
-    step = 0
-    while step < max_steps:
-        weights = [w + np.random.normal(scale=sigma, size=np.shape(w)).astype('float32')
-                   for w in orig_weights]
-        actor.set_actor_weights(weights, True)
-        new_act = actor.act_batch(states)
-        d = np.sqrt(np.mean(np.square(new_act - orig_act)))
-
-        dd = d - target_d
-        if np.abs(dd) < tol:
-            break
-
-        # too big sigma
-        if dd > 0:
-            sigma_max = sigma
-        # too small sigma
-        else:
-            sigma_min = sigma
-        sigma = sigma_min + (sigma_max - sigma_min) / 2
-        step += 1
-
-
 @Pyro4.expose
 class Sampler(object):
 
     def __init__(self):
         self.actor = None
-        self.rand_process = None
         self.env = None
         self.env_params = None
         self.total_episodes = 0
-        self.action_noise = True
-        self.best_reward = None
-        self.last_states = None
-
-    def set_best_reward(self, val):
-        self.best_reward = val
 
     def create_actor(self, params):
         _, _, _, actor_fn, _, params_actor, params_crit, _, _ = \
@@ -64,9 +27,6 @@ class Sampler(object):
 
     def set_actor_weights(self, weights):
         self.actor.set_actor_weights(weights)
-
-    def create_rand_process(self, params):
-        self.rand_process = OrnsteinUhlenbeckProcess(**params)
 
     def create_env(self, params):
         state_transform = StateVelCentr(**params['state_transform'])
@@ -77,98 +37,61 @@ class Sampler(object):
     def initialize(self, config, weights):
         self.create_actor(config['model_params'])
         self.create_env(config['env_params'])
-        self.create_rand_process(config['rand_process'])
         self.set_actor_weights(weights)
 
     @property
     def initialized(self):
         return self.actor is not None and self.rand_process is not None and self.env is not None
 
-    def _sample_noise_type(self):
-        tmp = np.random.rand()
-        noise_type = 'no_noise'
-        if tmp < 0.7:
-            noise_type = 'actions'
-        elif tmp < 0.9:
-            if self.last_states is not None and self.initialized:
-                noise_type = 'params'
-                set_params_noise(self.actor, self.last_states, self.rand_process.current_sigma)
-        return noise_type
+    def _set_noisy_weights(self, weights_means, weights_sigmas):
+        weights = []
+        for mu, sigma in zip(weights_means, weights_sigmas):
+            weights.append(np.random.normal(mu, sigma))
+        self.actor.set_actor_weights(weights)
 
-    def run_episode(self):
+    def run_episode(self, weights_means, weights_sigmas, n_times=5):
 
-        # prepare buffers for data
-        states = []
-        actions = []
-        rewards = []
-        terminals = []
+        # set weights of actor
+        self._set_noisy_weights(weights_means, weights_sigmas)
 
         start = time()
-        noise_type = self._sample_noise_type()
-
-        seed = random.randrange(2 ** 32 - 2)
-        state = self.env.reset(seed=seed, difficulty=2)
-        self.rand_process.reset_states()
 
         total_reward = 0.
         total_reward_original = 0.
-        terminal = False
-        steps = 0
+        steps = 0.
 
-        while not terminal:
-            state = np.asarray(state, dtype='float32')
-            action = self.actor.act(state)
+        for _ in range(n_times):
+            seed = random.randrange(2 ** 32 - 2)
+            state = self.env.reset(seed=seed, difficulty=2)
+            terminal = False
 
-            if noise_type == 'actions':
-                action += self.rand_process.sample()
+            while not terminal:
+                state = np.asarray(state, dtype='float32')
+                action = self.actor.act(state)
 
-            next_state, reward, next_terminal, info = self.env.step(action)
-            total_reward += reward
-            total_reward_original += info['original_reward']
-            steps += 1
+                next_state, reward, next_terminal, info = self.env.step(action)
+                total_reward += reward
+                total_reward_original += info['original_reward']
+                steps += 1
 
-            # add data to buffers
-            states.append(state)
-            actions.append(action)
-            rewards.append(reward)
-            terminals.append(terminal)
+                state = next_state
+                terminal = next_terminal
 
-            state = next_state
-            terminal = next_terminal
+                if terminal:
+                    break
 
-            if terminal:
-                break
+            self.total_episodes += 1
 
-        self.total_episodes += 1
-
-        # add data to buffers after episode end
-        states.append(state)
-        actions.append(np.zeros(self.env.noutput))
-        rewards.append(0)
-        terminals.append(terminal)
+            if self.total_episodes % 100 == 0:
+                self.env = RunEnv2(**self.env_params)
 
         ret = {
-            'states': np.asarray(states).astype(np.float32).tolist(),
-            'actions': np.asarray(actions).astype(np.float32).tolist(),
-            'rewards': np.asarray(rewards).astype(np.float32).tolist(),
-            'terminals': np.asarray(terminals).tolist(),
-            'total_reward': total_reward,
-            'total_reward_original': total_reward_original,
-            'steps': steps,
-            'time_took': time() - start,
-            'noise_type': noise_type
+            'total_reward': total_reward/n_times,
+            'total_reward_original': total_reward_original/n_times,
+            'steps': steps/n_times,
+            'time_took': (time() - start)/60,
+            'weights': [w.tolist() for w in self.actor.get_actor_weights()]
         }
-
-        # if reward is higher than best give it to coordinator to check
-        if self.best_reward is not None and total_reward > self.best_reward \
-                and total_reward > 0 and noise_type == 'params':
-            ret['weights'] = [w.tolist() for w in self.actor.get_actor_weights()]
-
-        if self.total_episodes % 100 == 0:
-            self.env = RunEnv2(**self.env_params)
-
-        # need to keep it for selecting param noise
-        self.last_states = ret['states']
 
         return ret
 

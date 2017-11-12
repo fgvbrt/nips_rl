@@ -95,154 +95,96 @@ def main():
         build_model(**config['model_params'])
     actor = Agent(actor_fn, params_actor, params_crit)
     actor.summary()
+
     if args.weights is not None:
         actor.load(args.weights)
-    weights = [[w.tolist() for w in weights] for weights in actor.get_weights()]
-    weights_actor, weights_critic = weights
+    else:
+        Warning('you started experiment without weights')
+
+    # this is means of weights
+    weights_mu = [w.tolist() for w in actor.get_actor_weights()]
+    weights_sigma = [(np.ones_like(w)*config['train_params']['init_sigma']).tolist()
+                     for w in weights_mu]
 
     # initialize samplers
     samplers = find_workers('sampler')
-    init_samplers(samplers, config, weights_actor)
-
-    # init tester
-    tester = find_workers('tester')[0]
-    tester.initialize(config, weights)
-
-    # init replay memory
-    memory = ReplayMemory(state_transform.state_size, 18, **config['repay_memory'])
+    init_samplers(samplers, config, weights_mu)
 
     # learning rate decay step
-    def get_lr_step(lr, lr_end, max_steps):
-        return (lr - lr_end) / max_steps
+    def get_linear_decay_step(start, end, steps):
+        return (start - end) / steps
 
-    actor_lr_step = get_lr_step(
-        config['model_params']['actor_lr'],
-        config['train_params']['actor_lr_end'],
-        config['train_params']['max_steps']
-    )
-    critic_lr_step = get_lr_step(
-        config['model_params']['critic_lr'],
-        config['train_params']['critic_lr_end'],
-        config['train_params']['max_steps']
+    sigma = config['train_params']['sigma_constr_start']
+    sigma_end = config['train_params']['sigma_constr_end']
+    sigma_constr_step = get_linear_decay_step(
+        config['train_params']['sigma_constr_start'],
+        config['train_params']['sigma_constr_end'],
+        config['train_params']['sigma_constr_steps']
     )
 
     # start sampling
-    samplers_results = {s: Pyro4.Future(s.run_episode)() for s in samplers}
+    n_runs = config['train_params']['n_runs']
+    samplers_results = {
+        s: Pyro4.Future(s.run_episode)(weights_mu, weights_sigma, n_runs) for s in samplers
+    }
 
     # common statistic
-    total_steps = 0
-    prev_steps = 0
-    updates = 0
+    episodes = 0
     best_reward = -1e8
-    weights_from_samplers = []
-    samplers_weights = False
-    start = time()
-    start_save = start
-    start_test = start
-    tester_res = Pyro4.Future(tester.test_model)(weights, best_reward)
-
-    start_train_steps_actor = config['train_params']['start_train_steps_actor']
-    start_train_steps_critic = config['train_params']['start_train_steps_critic']
-    start_train_steps_min = min(start_train_steps_actor, start_train_steps_critic)
-    start_train_steps_max = max(start_train_steps_actor, start_train_steps_critic)
-
     # main train loop
     print('start train loop')
-    while total_steps < config['train_params']['max_steps']:
+    samplers_returns = []
+    while episodes < config['train_params']['num_episodes']:
+
+        # preocess results from samplers
         for s, res in samplers_results.items():
             if res.ready:
                 res = res.value
-                total_steps += res['steps']
-                s.set_best_reward(best_reward)
+                samplers_returns.append((res['weights'], res['total_reward']))
 
                 # start new job
-                new_res = process_results(s, res, memory, weights[0], weights_from_samplers)
+                new_res = Pyro4.Future(s.run_episode)(weights_mu, weights_sigma, n_runs)
                 samplers_results[s] = new_res
 
                 # report progress on this episode
-                report_str = 'Global step: {}, steps/sec: {:.2f}, updates: {}, episode len {}, ' \
-                             'reward: {:.2f}, original_reward {:.4f}; best reward: {:.2f} noise {}'. \
-                    format(total_steps, 1. * total_steps / (time() - start), updates,
-                           res['steps'], res['total_reward'], res['total_reward_original'],
-                           best_reward, res['noise_type'])
+                report_str = 'mean reward: {}, mean steps: {:.2f}, time: {:.2f}'.\
+                    format(res['total_reward'], res['steps'], res['time_took'])
                 print(report_str)
 
-        # check if enough samles and can start training
-        if total_steps > start_train_steps_min:
-            # batch2 if faster than batch1
-            batch = memory.random_batch2(config['train_params']['batch_size'])
-            states, actions, rewards, terminals, next_states = batch
+        # check if episode done
+        if len(samplers_returns) > config['train_params']['episode_runs']:
+            episodes += 1
+            samplers_returns = sorted(samplers_returns, key=lambda x: x[1], reverse=True)
+            all_rewards = [r[1] for r in samplers_returns]
+            all_weights = [r[0] for r in samplers_returns]
 
-            # flip states
-            if np.random.rand() < config['train_params']['flip_prob']:
+            top_n = int(len(samplers_returns)*config['train_params']['best_ratio'])
+            mean_rew = float(np.mean(all_rewards))
+            best_rew = all_rewards[0]
+            top_n_rew = float(np.mean(all_rewards[:top_n]))
 
-                states_flip = state_transform.flip_states(states)
-                next_states_flip = state_transform.flip_states(next_states)
-                actions_flip = np.zeros_like(actions)
-                actions_flip[:, :9] = actions[:, 9:]
-                actions_flip[:, 9:] = actions[:, :9]
+            print('episode: {}; mean reward: {:.2f}; top_n reward {:.2f}; best reward: {:.2f}'.\
+                  format(episodes, mean_rew, top_n_rew, best_rew))
 
-                states = np.concatenate((states, states_flip))
-                actions = np.concatenate((actions, actions_flip))
-                rewards = np.tile(rewards.ravel(), 2).reshape(-1, 1)
-                terminals = np.tile(terminals.ravel(), 2).reshape(-1, 1)
-                next_states = np.concatenate((next_states, next_states_flip))
-                batch = (states, actions, rewards, terminals, next_states)
+            # calculate new sigma and mu
+            weights_mu = []
+            weights_sigma = []
+            for w in zip(*all_weights[:top_n]):
+                weights_mu.append(np.mean(w, axis=0))
+                weights_sigma.append(np.std(w, axis=0))
 
-            # choose actor or critic to train
-            actor_loss = critic_loss = 0
-            if total_steps > start_train_steps_max:
-                actor_loss, critic_loss = train_fn(*batch)
-            elif total_steps > start_train_steps_actor:
-                actor_loss = train_actor(states)
-            elif total_steps > start_train_steps_critic:
-                critic_loss = train_critic(*batch)
+            weights_mu = [w.tolist() for w in weights_mu]
+            weights_sigma = [w.tolist() for w in weights_sigma]
 
-            updates += 1
-            target_update_fn()
-            if np.isnan(actor_loss):
-                raise ValueError('actor loss is nan')
-            if np.isnan(critic_loss):
-                raise ValueError('critic loss is nan')
+            del samplers_returns[:]
+            sigma = max(sigma_end, sigma-sigma_constr_step)
 
-            weights = [[w.tolist() for w in weights] for weights in actor.get_weights()]
-            weights_actor, weights_critic = weights
-
-            delta_steps = total_steps - prev_steps
-            prev_steps += delta_steps
-
-            actor_lr.set_value(lasagne.utils.floatX(
-                max(actor_lr.get_value() - delta_steps*actor_lr_step, config['train_params']['actor_lr_end'])))
-            critic_lr.set_value(lasagne.utils.floatX(
-                max(critic_lr.get_value() - delta_steps*critic_lr_step, config['train_params']['critic_lr_end'])))
-
-        # check if need to save and test
-        if (time() - start_save)/60. > config['test_params']['save_period_min']:
-            fname = os.path.join(save_dir, 'weights_updates_{}.h5'.format(updates))
-            actor.save(fname)
-            start_save = time()
-
-        # check if can start new test process
-        weights_from_samplers = [(w, r) for w, r in weights_from_samplers if r > best_reward and r > 0]
-        if ((time() - start_test) / 60. > config['test_params']['test_period_min'] or len(weights_from_samplers) > 0) \
-                and tester_res.ready:
-            # save best reward
-            test_reward, test_weights = tester_res.value
-            if test_reward > best_reward:
-                best_reward = test_reward
-                if test_weights is not None and samplers_weights:
-                    print('set sampler actor weights')
-                    actor.set_actor_weights(test_weights)
-
-            if len(weights_from_samplers) > 0:
-                _weights = [weights_from_samplers.pop()[0], weights_critic]
-                samplers_weights = True
-            else:
-                _weights = weights
-                samplers_weights = False
-
-            tester_res = Pyro4.Future(tester.test_model)(_weights, best_reward)
-            start_test = time()
+            # save top weights
+            for i, w in enumerate(all_weights[:top_n]):
+                actor.set_actor_weights(w)
+                fname = os.path.join(save_dir, 'episode_{}_rew_{:.2f}.h5'.\
+                                     format(episodes, all_rewards[i]))
+                actor.save(fname)
 
 
 if __name__ == '__main__':
