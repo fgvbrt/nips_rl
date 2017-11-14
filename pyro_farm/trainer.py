@@ -79,9 +79,6 @@ def main():
     with open('config.yaml') as f:
         config = yaml.load(f)
 
-    # add savedir to config
-    config['test_params']['save_dir'] = save_dir
-
     # save config
     with open(os.path.join(save_dir, 'config.yaml'), 'w') as f:
         yaml.dump(config, f)
@@ -152,7 +149,7 @@ def main():
                 print(report_str)
 
         # check if episode done
-        if len(samplers_returns) > config['train_params']['episode_runs']:
+        if len(samplers_returns) >= config['train_params']['episode_runs']:
             episodes += 1
             samplers_returns = sorted(samplers_returns, key=lambda x: x[1], reverse=True)
             all_rewards = [r[1] for r in samplers_returns]
@@ -171,7 +168,7 @@ def main():
             weights_sigma = []
             for w in zip(*all_weights[:top_n]):
                 weights_mu.append(np.mean(w, axis=0))
-                weights_sigma.append(np.std(w, axis=0))
+                weights_sigma.append(np.std(w, axis=0) + sigma)
 
             weights_mu = [w.tolist() for w in weights_mu]
             weights_sigma = [w.tolist() for w in weights_sigma]

@@ -11,13 +11,13 @@ model_params:
 
 train_params:
   num_episodes: 100000000
-  episode_runs: 10
+  episode_runs: 100
   best_ratio: 0.1
-  n_runs: 1
-  init_sigma: 0.02
-  sigma_constr_start: 0.0
+  n_runs: 5
+  init_sigma: 0.01
+  sigma_constr_start: 0.000
   sigma_constr_end: 0.0
-  sigma_constr_steps: 1000
+  sigma_constr_steps: 100
 
 env_params:
   env:
