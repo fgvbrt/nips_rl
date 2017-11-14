@@ -9,14 +9,15 @@ from time import sleep
 from multiprocessing import Process, cpu_count, Value, Queue
 import queue
 from memory import ReplayMemory
-from agent import run_agent, elu, sigmoid
-from state import StateVelCentr, StateVel
+from agent import run_agent
+from state import StateVelCentr
 import lasagne
 import random
 from environments import RunEnv2
 from datetime import datetime
 from time import time
 import config
+import shutil
 
 
 def get_args():
@@ -28,7 +29,7 @@ def get_args():
     parser.add_argument('--test_period_min', default=30, type=int, help="Test interval int min.")
     parser.add_argument('--save_period_min', default=30, type=int, help="Save interval int min.")
     parser.add_argument('--num_test_episodes', type=int, default=5, help="Number of test episodes.")
-    parser.add_argument('--batch_size', type=int, default=1000, help="Batch size.")
+    parser.add_argument('--batch_size', type=int, default=200, help="Batch size.")
     parser.add_argument('--start_train_steps', type=int, default=10000, help="Number of steps tp start training.")
     parser.add_argument('--critic_lr', type=float, default=2e-3, help="critic learning rate")
     parser.add_argument('--actor_lr', type=float, default=1e-3, help="actor learning rate.")
@@ -36,6 +37,7 @@ def get_args():
     parser.add_argument('--actor_lr_end', type=float, default=5e-5, help="actor learning rate.")
     parser.add_argument('--flip_prob', type=float, default=1., help="Probability of flipping.")
     parser.add_argument('--layer_norm', action='store_true', help="Use layer normaliation.")
+    parser.add_argument('--param_noise_prob', type=float, default=0.3, help="Probability of parameters noise.")
     parser.add_argument('--exp_name', type=str, default=datetime.now().strftime("%d.%m.%Y-%H:%M"),
                         help='Experiment name')
     parser.add_argument('--weights', type=str, default=None, help='weights to load')
@@ -43,8 +45,8 @@ def get_args():
 
 
 def test_agent(testing, state_transform, num_test_episodes,
-               model_params, weights, best_reward, updates, save_dir):
-    env = RunEnv2(state_transform, max_obstacles=config.num_obstacles, skip_frame=config.skip_frames)
+               model_params, weights, best_reward, updates, global_step, save_dir):
+    env = RunEnv2(state_transform, max_obstacles=config.num_obstacles, skip_frame=1)
     test_rewards = []
 
     train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
@@ -66,8 +68,13 @@ def test_agent(testing, state_transform, num_test_episodes,
         test_rewards.append(test_reward)
     mean_reward = np.mean(test_rewards)
     std_reward = np.std(test_rewards)
-    print('test reward mean: {:.2f}, std: {:.2f}, all: {} '.\
-        format(float(mean_reward), float(std_reward), test_rewards))
+
+    test_str ='global step {}; test reward mean: {:.2f}, std: {:.2f}, all: {} '.\
+        format(global_step.value, float(mean_reward), float(std_reward), test_rewards)
+
+    print(test_str)
+    with open(os.path.join(save_dir, 'test_report.log'), 'a') as f:
+        f.write(test_str + '\n')
 
     if mean_reward > best_reward.value or mean_reward > 30 * env.reward_mult:
         if mean_reward > best_reward.value:
@@ -85,12 +92,13 @@ def main():
     save_dir = os.path.join('weights', args.exp_name)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
+    else:
+        shutil.move(save_dir, save_dir + '.backup')
+        os.makedirs(save_dir)
 
-    #state_transform = StateVelCentr(exclude_obstacles=True)
     state_transform = StateVelCentr(obstacles_mode='standard',
                                     exclude_centr=True,
                                     vel_states=[])
-    #state_transform = StateVel(exclude_obstacles=True)
     num_actions = 18
 
     # build model
@@ -133,7 +141,8 @@ def main():
         w_queue = Queue()
         worker = Process(target=run_agent,
                          args=(model_params, weights, state_transform, data_queue, w_queue,
-                               i, global_step, updates, best_reward, args.max_steps)
+                               i, global_step, updates, best_reward,
+                               args.param_noise_prob, save_dir, args.max_steps)
                          )
         worker.daemon = True
         worker.start()
@@ -201,7 +210,8 @@ def main():
             start_save = time()
 
         # start new test process
-        weights_rew_to_check = [(w, r) for w, r in weights_rew_to_check if r > best_reward.value]
+        weights_rew_to_check = [(w, r) for w, r in weights_rew_to_check if r > best_reward.value and r > 0]
+        weights_rew_to_check = sorted(weights_rew_to_check, key=lambda x: x[1])
         if ((time() - start_test) / 60. > args.test_period_min or len(weights_rew_to_check) > 0) and testing.value == 0:
             testing.value = 1
             print('start test')
@@ -211,7 +221,8 @@ def main():
                 _weights = weights
             worker = Process(target=test_agent,
                              args=(testing, state_transform, args.num_test_episodes,
-                                   model_params, _weights, best_reward, updates, save_dir)
+                                   model_params, _weights, best_reward,
+                                   updates, global_step, save_dir)
                              )
             worker.daemon = True
             worker.start()

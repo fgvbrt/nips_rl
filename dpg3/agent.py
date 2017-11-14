@@ -1,11 +1,12 @@
 from environments import RunEnv2
 import numpy as np
 import random
-from random_process import OrnsteinUhlenbeckProcess, RandomActivation
+from random_process import OrnsteinUhlenbeckProcess
 from time import time
 import pickle
 from model import Agent, build_model
 import config
+import os
 
 
 def elu(x):
@@ -80,7 +81,8 @@ def get_noisy_weights(params, sigma):
 
 
 def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
-              process, global_step, updates, best_reward, max_steps=10000000):
+              process, global_step, updates, best_reward, param_noise_prob, save_dir,
+              max_steps=10000000):
 
     train_fn, actor_fn, target_update_fn, params_actor, params_crit, actor_lr, critic_lr = \
         build_model(**model_params)
@@ -88,7 +90,6 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
     actor.set_actor_weights(weights)
 
     env = RunEnv2(state_transform, max_obstacles=config.num_obstacles, skip_frame=config.skip_frames)
-    #random_process = RandomActivation(size=env.noutput)
     random_process = OrnsteinUhlenbeckProcess(theta=.1, mu=0., sigma=.2, size=env.noutput,
                                               sigma_min=0.05, n_steps_annealing=1e6)
     # prepare buffers for data
@@ -163,11 +164,11 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
                    total_reward, total_reward_original, best_reward.value, 'actions' if action_noise else 'params')
         print(report_str)
 
-        with open('report.log', 'a') as f:
+        with open(os.path.join(save_dir, 'train_report.log'), 'a') as f:
             f.write(report_str + '\n')
 
         actor.set_actor_weights(weights)
-        action_noise = np.random.rand() < 0.7
+        action_noise = np.random.rand() < 1 - param_noise_prob
         if not action_noise:
             set_params_noise(actor, states_np, random_process.current_sigma)
 
@@ -178,4 +179,4 @@ def run_agent(model_params, weights, state_transform, data_queue, weights_queue,
         del terminals[:]
 
         if total_episodes % 100 == 0:
-            env = RunEnv2(state_transform, max_obstacles=10, skip_frame=5)
+            env = RunEnv2(state_transform, max_obstacles=config.num_obstacles, skip_frame=config.skip_frames)
