@@ -23,7 +23,7 @@ import shutil
 def get_args():
     parser = argparse.ArgumentParser(description="Run commands")
     parser.add_argument('--gamma', type=float, default=0.9, help="Discount factor for reward.")
-    parser.add_argument('--num_agents', type=int, default=cpu_count()-1, help="Number of agents to run.")
+    parser.add_argument('--n_threads', type=int, default=cpu_count(), help="Number of agents to run.")
     parser.add_argument('--sleep', type=int, default=0, help="Sleep time in seconds before start each worker.")
     parser.add_argument('--max_steps', type=int, default=10000000, help="Number of steps.")
     parser.add_argument('--test_period_min', default=30, type=int, help="Test interval int min.")
@@ -136,8 +136,9 @@ def main():
     data_queue = Queue()
     workers = []
     weights_queues = []
-    print('starting {} agents'.format(args.num_agents))
-    for i in range(args.num_agents):
+    num_agents = args.n_threads - 2
+    print('starting {} agents'.format(num_agents))
+    for i in range(num_agents):
         w_queue = Queue()
         worker = Process(target=run_agent,
                          args=(model_params, weights, state_transform, data_queue, w_queue,
