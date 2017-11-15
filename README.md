@@ -11,6 +11,7 @@ build by youself faster version [here](https://github.com/Scitator/opensim-core)
         $ ./setup.sh
 
 You may want to change conda env name in script and comment last line if not building opnesim by yourself 
+
 3) If you experience theano errors. Try to move .theanorc file:
 
         $ mv ~/.theanorc ~/.theanorc.backup
@@ -19,7 +20,7 @@ You may want to change conda env name in script and comment last line if not bui
 1) Activate environment:
 
         $ source activate nips_rl_fast3
-2) Run code with flags the best flags:
+2) Run code with best flags:
 
         $ python run_experiment.py --param_noise_prob 0.3 --flip_prob 1 --layer_norm
 
@@ -30,4 +31,5 @@ There are lot of branches with various ideas tested during competition but witho
     
    - [distributed ddpg with pyro4](https://github.com/fgvbrt/nips_rl/tree/farm) inspired by [ctmarko repository](https://github.com/ctmakro/stanford-osrl)
    - [distributed CEM with pyro4](https://github.com/fgvbrt/nips_rl/tree/cem) I am not sure that this is canonical implementation, it was done in the last night.
+   - [we even tried to do planning](https://github.com/fgvbrt/nips_rl/tree/kr-uct) as described in [this article](https://www.ijcai.org/Proceedings/16/Papers/104.pdf) 
 
