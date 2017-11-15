@@ -12,7 +12,7 @@ build by youself faster version [here](https://github.com/Scitator/opensim-core)
 
 You may want to change conda env name in script and comment last line if not building opnesim by yourself 
 
-3) If you experience theano errors. Try to move .theanorc file:
+3) If you experience theano errors try to move .theanorc file:
 
         $ mv ~/.theanorc ~/.theanorc.backup
 
@@ -29,7 +29,7 @@ The final submitted model was trained in this [commit](https://github.com/fgvbrt
 
 There are lot of branches with various ideas tested during competition but without documentation, you could check for example following branches:
     
-   - [distributed ddpg with pyro4](https://github.com/fgvbrt/nips_rl/tree/farm) inspired by [ctmarko repository](https://github.com/ctmakro/stanford-osrl)
-   - [distributed CEM with pyro4](https://github.com/fgvbrt/nips_rl/tree/cem) I am not sure that this is canonical implementation, it was done in the last night.
+   - [distributed ddpg with pyro4](https://github.com/fgvbrt/nips_rl/tree/farm/pyro_farm) inspired by [ctmarko repository](https://github.com/ctmakro/stanford-osrl)
+   - [distributed CEM with pyro4](https://github.com/fgvbrt/nips_rl/tree/cem/pyro_farm) I am not sure that this is canonical implementation, it was done in the last night.
    - [we even tried to do planning](https://github.com/fgvbrt/nips_rl/tree/kr-uct/kr-uct) as described in [this article](https://www.ijcai.org/Proceedings/16/Papers/104.pdf) 
 
